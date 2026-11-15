@@ -9,10 +9,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { isMap, isScalar, parseDocument, type Document, type Scalar, type YAMLMap, type YAMLSeq } from 'yaml';
+import { resolvePlatform, targetName } from '@e2e-dev/core/lib/config/targets';
+import { isLoopbackHost } from '@e2e-dev/core/lib/internal/urls';
 import type { PackageManager } from '../../internal/package-manager.ts';
-import { isLoopbackHost } from '../../internal/urls.ts';
-import type { E2EConfig } from '../../types.ts';
-import { resolvePlatform, targetName } from '../../config/targets.ts';
+import type { E2EConfig } from '../../run-types.ts';
 import { GATEWAYS, type GatewayPreset } from './gateways.ts';
 
 export type CiId = 'github-actions' | 'gitlab';
