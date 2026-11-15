@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { projectRelativePath, sourceLocation } from '../../src/internal/source.ts';
+import { projectRelativePath, sourceLocation } from '@e2e-dev/core/lib/internal/source';
 
 function stackThrough(file: string): string {
   return ['Error: boom', `    at Object.<anonymous> (${file}:14:3)`, '    at run (/repo/app/node_modules/e2e/dist/run/steps.js:9:1)'].join('\n');
@@ -47,4 +47,13 @@ describe('projectRelativePath', () => {
 
   // A relative result that is itself absolute (a file on another drive) only
   // arises from path.win32, which the function does not use; it has no POSIX case.
+});
+
+it('decodes file URLs and rejects long slash-only stack frames', () => {
+  expect(sourceLocation(stackThrough('file:///repo/app/tests/a%20b.e2e.ts'), '/repo/app')).toEqual({ file: 'tests/a b.e2e.ts', line: 14, column: 3 });
+  expect(sourceLocation('    at ' + '/'.repeat(200_000), '/repo/app')).toBeUndefined();
+});
+
+it.each(['file:/repo/app/tests/a%20b.e2e.ts', 'file:///repo/app/tests/a%20b.e2e.ts', 'file://localhost/repo/app/tests/a%20b.e2e.ts'])('keeps a stack frame using %s', file => {
+  expect(sourceLocation(stackThrough(file), '/repo/app')).toEqual({ file: 'tests/a b.e2e.ts', line: 14, column: 3 });
 });

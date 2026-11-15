@@ -19,16 +19,16 @@
 
 import type { ToolSet } from 'ai';
 import { z } from 'zod';
-import type { ExecutorNode, ExecutorObservation, ExecutorObserveOptions, StepExecutorContext } from '../agent/executor.ts';
-import { isFailedResult } from '../agent/loop-guards.ts';
-import { typedThroughKeyboard } from '../agent/primitives.ts';
-import { SAMPLE_PREFIX } from '../agent/sample-files.ts';
-import type { ScreenOutput } from '../agent/screen-update.ts';
-import type { LocatorExpression, NodeRef, SemanticNode } from '../engine/surface.ts';
-import { codedMessage, InfrastructureError } from '../internal/errors.ts';
-import { collapseText } from '../internal/text.ts';
-import { filterExpression, indexExpression } from '../locator/expression.ts';
-import type { Role } from '../types.ts';
+import type { ExecutorNode, ExecutorObservation, ExecutorObserveOptions, StepExecutorContext } from '@e2e-dev/core/lib/agent/executor';
+import { isFailedResult } from '@e2e-dev/core/lib/agent/loop-guards';
+import { typedThroughKeyboard } from '@e2e-dev/core/lib/agent/primitives';
+import { SAMPLE_PREFIX } from '@e2e-dev/core/lib/agent/sample-files';
+import type { ScreenOutput } from '@e2e-dev/core/lib/agent/screen-update';
+import type { LocatorExpression, NodeRef, SemanticNode } from '@e2e-dev/core/lib/engine/surface';
+import { codedMessage, InfrastructureError } from '@e2e-dev/core/lib/internal/errors';
+import { collapseText } from '@e2e-dev/core/lib/internal/text';
+import { filterExpression, indexExpression } from '@e2e-dev/core/lib/locator/expression';
+import type { Role } from '@e2e-dev/core/lib/types';
 
 /** Matches read per locator while looking for the target among them. */
 const MAX_READ_MATCHES = 50;
@@ -136,7 +136,7 @@ interface Probe {
 /** The grammar tools that print a line or say why they print none; the point tools print nothing. */
 const LINE_TOOLS: ReadonlySet<string> = new Set([
   'tap', 'double_tap', 'long_press', 'right_click', 'hover', 'type', 'type_secret', 'press', 'select', 'check',
-  'drag', 'upload', 'scroll', 'scroll_to', 'navigate', 'back', 'resize_viewport', 'dismiss_keyboard',
+  'drag', 'upload', 'scroll', 'scroll_to', 'navigate', 'back', 'resize_viewport', 'switch_tab', 'close_tab', 'dismiss_keyboard',
 ]);
 
 /** The locator method each node verb's tool repeats as. */
@@ -326,6 +326,10 @@ export class SessionTestLines {
         return { line: 'await app.back();' };
       case 'resize_viewport':
         return { reason: `set ${String(input['width'])}x${String(input['height'])} with the engine fixture's viewport call` };
+      case 'switch_tab':
+        return { reason: `show tab ${String(input['tab'])} with the engine fixture's tab call` };
+      case 'close_tab':
+        return { reason: `close tab ${String(input['tab'])} with the engine fixture's tab call` };
       default:
         return { reason: `${name} has no test line` };
     }

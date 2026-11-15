@@ -1,14 +1,14 @@
 /** Zero-turn replay: typed dispatch, relocation backoff, divergence. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentError } from '../../src/agent/error.ts';
-import type { ExecutorActions } from '../../src/agent/executor.ts';
-import { replayTrace, verifyEndState, type ObservedScreen, type ReplayHost } from '../../src/agent/replay.ts';
-import { deltaMismatch } from '../../src/cache/anchors.ts';
-import type { TraceTargetDescriptor } from '../../src/cache/trace.ts';
-import type { SettleMode } from '../../src/agent/settle-policy.ts';
-import type { ActionTrace, RecordedAction } from '../../src/cache/trace.ts';
-import type { SemanticNode } from '../../src/engine/surface.ts';
+import { AgentError } from '@e2e-dev/core/lib/agent/error';
+import type { ExecutorActions } from '@e2e-dev/core/lib/agent/executor';
+import { replayTrace, verifyEndState, type ObservedScreen, type ReplayHost } from '@e2e-dev/core/lib/agent/replay';
+import { deltaMismatch } from '@e2e-dev/core/lib/cache/anchors';
+import type { TraceTargetDescriptor } from '@e2e-dev/core/lib/cache/trace';
+import type { SettleMode } from '@e2e-dev/core/lib/agent/settle-policy';
+import type { ActionTrace, RecordedAction } from '@e2e-dev/core/lib/cache/trace';
+import type { SemanticNode } from '@e2e-dev/core/lib/engine/surface';
 import { redactedNodes } from '../helpers/redacted.ts';
 
 beforeEach(() => {
@@ -75,6 +75,8 @@ function makeHost(options: {
     navigate: (url) => act('navigate', url),
     back: () => act('back'),
     resize: (size) => act('resize', size),
+    switchTab: (tab) => act('switchTab', tab),
+    closeTab: (tab) => act('closeTab', tab),
     tapAt: async (point) => {
       await act('tapAt', point);
       return { point, summary: 'scripted' };
@@ -312,11 +314,16 @@ describe('replayTrace', () => {
         { name: 'upload', summary: 'upload', target, paths: ['fixtures/a.txt'] },
         { name: 'back', summary: 'back' },
         { name: 'resize', summary: 'resize', size: { width: 390, height: 844 } },
+        { name: 'switchTab', summary: 'switch to tab 2', tab: 1 },
+        { name: 'closeTab', summary: 'close tab 2', tab: 1 },
       ]),
     );
-    expect(outcome).toMatchObject({ completed: true, executed: 9, total: 9 });
-    expect(host.calls).toEqual(['hover', 'doubleTap', 'longPress', 'secondaryTap', 'scrollTo', 'check', 'upload', 'back', 'resize']);
+    expect(outcome).toMatchObject({ completed: true, executed: 11, total: 11 });
+    expect(host.calls).toEqual(['hover', 'doubleTap', 'longPress', 'secondaryTap', 'scrollTo', 'check', 'upload', 'back', 'resize', 'switchTab', 'closeTab']);
     expect(details[8]).toEqual({ width: 390, height: 844 });
+    // The trace counts tabs from 0, the grammar from 1.
+    expect(details[9]).toBe(2);
+    expect(details[10]).toBe(2);
     expect(details[5]).toEqual({ t: { id: 'n1' }, checked: false });
     expect(details[6]).toEqual({ t: { id: 'n1' }, paths: ['fixtures/a.txt'] });
   });

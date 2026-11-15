@@ -6,6 +6,7 @@
   "workers": 1,
   "methods": [
     "engine/observe",
+    "engine/readStyle",
     "engine/perform",
     "engine/performAt",
     "keyboard/type",
@@ -13,6 +14,8 @@
     "keyboard/dismiss",
     "artifacts/screenshot",
     "session/back",
+    "session/switchTab",
+    "session/closeTab",
     "session/restart",
     "session/reset",
     "lifecycle/doctor",

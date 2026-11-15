@@ -45,7 +45,7 @@ import {
   type ViewportSize,
   ConfigurationError,
   TestError,
-} from 'e2e/engine';
+} from '@e2e-dev/core/engine';
 import { isAppNotRunning, isSnapshotPresentationFailure, isUnreadableCapture, runCommand, staleOr } from './errors.ts';
 import { pointerInteraction, DEFAULT_LONG_PRESS_MS } from './actions.ts';
 import { resolveExpression } from './locate.ts';
@@ -351,6 +351,9 @@ const MOBILE_OPTION_KEYS: readonly string[] = Object.keys({
   videoTouches: true,
 } satisfies Record<keyof MobileOptions, true>);
 
+/** Every `snapshot` value, kept equal to `MobileOptions['snapshot']` by the compiler. */
+const SNAPSHOT_MODES: readonly string[] = Object.keys({ full: true, interactive: true } satisfies Record<NonNullable<MobileOptions['snapshot']>, true>);
+
 /** Every state a permission takes, kept equal to `PermissionState` by the compiler. */
 const PERMISSION_STATES: readonly string[] = Object.keys({ grant: true, deny: true, reset: true } satisfies Record<PermissionState, true>);
 
@@ -425,6 +428,28 @@ function settleOptions(settle: MobileOptions['settle']): SettleOptions {
   return { settle: true, settleQuietMs: quietMs };
 }
 
+/**
+ * Resolves the `snapshot` option to whether captures keep interactive nodes
+ * only; `'Interactive'` used to capture the full tree as if unset.
+ */
+function interactiveSnapshots(snapshot: MobileOptions['snapshot']): boolean {
+  if (snapshot !== undefined && !SNAPSHOT_MODES.includes(snapshot)) {
+    throw new ConfigurationError('INVALID_CONFIG', `mobile: \`snapshot\` must be ${SNAPSHOT_MODES.map((mode) => `'${mode}'`).join(' or ')}, got ${JSON.stringify(snapshot)}`);
+  }
+  return snapshot === 'interactive';
+}
+
+/**
+ * Resolves the `videoTouches` option to whether recordings hide the touch
+ * overlay; `'false'` used to draw the touches as if unset.
+ */
+function hideTouches(videoTouches: MobileOptions['videoTouches']): boolean {
+  if (videoTouches !== undefined && typeof videoTouches !== 'boolean') {
+    throw new ConfigurationError('INVALID_CONFIG', `mobile: \`videoTouches\` must be true or false, got ${JSON.stringify(videoTouches)}`);
+  }
+  return videoTouches === false;
+}
+
 /** Calls one of the harness's trace hooks; a hook that throws, or one an older harness lacks, never fails the device's work. */
 function tellHarness(call: () => void): void {
   try {
@@ -469,10 +494,9 @@ export class AgentDeviceSurface {
   /** How this worker's device records through its provider: set in init when the pool's provider records and the slot rides one of its leases. */
   private leaseRecorder: LeaseRecorder | undefined;
   /**
-   * Commands still running on the device. agent-device takes no abort
-   * signal, so a cancelled or timed-out call is only abandoned by its
-   * caller; it keeps executing. The next attempt waits for these to settle
-   * before it opens anything, so a ghost tap can never land in a retry.
+   * SDK requests still pending, including uncancelled commands abandoned
+   * by their caller. Cancelled press promises can settle before native
+   * work ends; agent-device owns its bounded drain and device-request ordering.
    */
   private readonly inflight = new Set<Promise<unknown>>();
 
@@ -490,6 +514,10 @@ export class AgentDeviceSurface {
   private latestScreen: ProjectedScreen | undefined;
   /** Budget a control that came with the last action gets to finish arriving; see DEFAULT_TRANSITION_MS. */
   private readonly transitionMs: number;
+  /** Whether snapshots keep interactive nodes only, from the `snapshot` option. */
+  private readonly interactiveSnapshots: boolean;
+  /** Whether recordings hide the touch overlay, from the `videoTouches` option. */
+  private readonly hideTouches: boolean;
   /**
    * The screen's logical size as last learned from a snapshot with geometry
    * or from the device itself, so a snapshot without geometry (an empty
@@ -508,6 +536,8 @@ export class AgentDeviceSurface {
     this.pool = new DevicePool(options, createClient);
     this.settleOptions = settleOptions(options.settle);
     this.transitionMs = transitionMs(options.transition);
+    this.interactiveSnapshots = interactiveSnapshots(options.snapshot);
+    this.hideTouches = hideTouches(options.videoTouches);
   }
 
   /** Whether the target pins an app for `app.open()`, `app.restart()`, and `app.clearState()` to launch. */
@@ -572,9 +602,9 @@ export class AgentDeviceSurface {
     return result;
   }
 
-  /** The budget one operation runs under; its device commands stay in flight until they settle. */
-  inputBudget(label: string, timeoutMs: number): InputBudget {
-    return new InputBudget(label, timeoutMs, (pending) => this.track(pending));
+  /** The budget and cancellation signal shared by one operation's inputs. */
+  inputBudget(label: string, operation: Pick<OperationContext, 'timeoutMs' | 'signal'>): InputBudget {
+    return new InputBudget(label, operation.timeoutMs, (pending) => this.track(pending), operation.signal);
   }
 
   /** Registers one device command as in flight until it settles. */
@@ -710,7 +740,7 @@ export class AgentDeviceSurface {
           path: absolute,
           quality: 'medium',
           recordingScope: 'device',
-          ...(this.options.videoTouches === false ? { hideTouches: true } : {}),
+          ...(this.hideTouches ? { hideTouches: true } : {}),
         }),
       operation.signal,
     );
@@ -1149,7 +1179,7 @@ export class AgentDeviceSurface {
   }
 
   async observe(operation: OperationContext, options: EngineObserveOptions | undefined, budget: InputBudget): Promise<EngineSnapshot> {
-    const raw = await this.snapshotOrEmpty(operation, this.options.snapshot === 'interactive', budget);
+    const raw = await this.snapshotOrEmpty(operation, this.interactiveSnapshots, budget);
     const projected = this.project(raw);
     this.generation = new Map(projected.index.map((entry) => [entry.id, this.bind(entry, projected)]));
     const viewport = await this.viewportFor(projected, operation.signal, budget);
@@ -1456,16 +1486,16 @@ export class AgentDeviceSurface {
       }
       switch (action.kind) {
         case 'tap':
-          return input.send(() => client.interactions.press({ ...this.actionTarget(target, true), ...settle }));
+          return input.press(client, { ...this.actionTarget(target, true), ...settle });
         case 'focus':
           // A touch surface focuses by tapping, and a tap on anything but an
           // editable field activates it; focus is offered for fields only.
           if (target.node.role !== 'textbox') {
             throw unsupported(`agent-device can only focus editable fields; node ${target.id} is ${target.node.role ?? 'unknown'}`);
           }
-          return input.send(() => client.interactions.press({ ...this.actionTarget(target), ...settle }));
+          return input.press(client, { ...this.actionTarget(target), ...settle });
         case 'doubleTap':
-          return input.send(() => client.interactions.press({ ...this.actionTarget(target), count: 2, ...settle }));
+          return input.press(client, { ...this.actionTarget(target), count: 2, ...settle });
         case 'longPress':
           return input.send(
             () => client.interactions.longPress({ ...this.actionTarget(target), ...settle, durationMs: action.durationMs ?? DEFAULT_LONG_PRESS_MS }),
@@ -1490,7 +1520,7 @@ export class AgentDeviceSurface {
             throw unsupported(`agent-device cannot read whether node ${target.id} is checked; tap it instead`);
           }
           if (checked === wanted) return undefined;
-          return input.send(() => client.interactions.press({ ...this.actionTarget(target, true), ...settle }));
+          return input.press(client, { ...this.actionTarget(target, true), ...settle });
         }
         case 'press':
           return this.pressKey(client, target, action.key, settle, input);
@@ -1553,7 +1583,7 @@ export class AgentDeviceSurface {
     // A key reaches the field through the soft keyboard, which is up only
     // while the field holds focus.
     if (entry.node.role === 'textbox' && entry.node.states?.focused !== true) {
-      await input.send(() => client.interactions.press({ ...this.actionTarget(entry), ...settle }));
+      await input.press(client, { ...this.actionTarget(entry), ...settle });
     }
     if (enter) return input.send(() => client.command.keyboard({ action: 'enter' }));
     return input.send(() => client.interactions.type({ text: parsed.key.kind === 'char' ? parsed.key.char : ' ' }));
@@ -1567,8 +1597,7 @@ export class AgentDeviceSurface {
   async performAt(point: ViewportPoint, action: PointerAction, operation: OperationContext, input: InputBudget): Promise<void> {
     const settle = operation.origin === 'test' ? {} : this.settleOptions;
     const before = this.latestScreen;
-    const holdMs = action.kind === 'longPress' ? (action.durationMs ?? DEFAULT_LONG_PRESS_MS) : action.kind === 'swipeTo' ? action.durationMs : undefined;
-    await this.command(`${action.kind} at point`, (client) => input.send(() => pointerInteraction(client, point, action, settle, gestureStabilization(operation)), holdMs), operation.signal);
+    await this.command(`${action.kind} at point`, (client) => pointerInteraction(client, point, action, settle, gestureStabilization(operation), input), operation.signal);
     if (action.kind === 'swipeTo') this.noteGesture(operation);
     this.markAction(before);
   }
@@ -1697,7 +1726,7 @@ export class AgentDeviceSurface {
     const tipTop = tip.rect.y;
     const button = nodes.find((node) => node.label === 'Continue' && node.rect !== undefined && node.rect.y > tipTop);
     if (button?.rect === undefined) return raw;
-    await this.command('keyboard.dismiss', (client) => input.send(() => client.interactions.press(centreOf(button.rect!))), signal);
+    await this.command('keyboard.dismiss', (client) => input.press(client, centreOf(button.rect!)), signal);
     return await this.snapshot(signal, false, input);
   }
 

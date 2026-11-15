@@ -12,7 +12,8 @@ implementation, derives its capabilities, and returns a handle for `targets`
 in the config. The runner drives it over the
 [engine protocol](/reference/engine-protocol), in its own process; see
 [Engines](/engines). Use `test.extend` fixtures for resources outside the UI,
-such as APIs or databases.
+such as APIs or databases. `@e2e-dev/core/engine` is the same module, and a
+published engine imports it from there and peers on `@e2e-dev/core`.
 
 This sketch assumes a `connect` adapter for the platform:
 
@@ -89,9 +90,9 @@ rules:
 | `spiVersion` | Anything but `1`. |
 | `platform` | Empty. |
 | `workers` | Not a positive safe integer. |
-| `observe`, `locate`, `perform`, `performAt`, `prepare`, `finish`, `doctor`, `init`, `startAttempt`, `settleAttempt`, `endAttempt`, `dispose`, `validateApp` | Not a function. |
+| `observe`, `readStyle`, `locate`, `perform`, `performAt`, `prepare`, `finish`, `doctor`, `init`, `startAttempt`, `settleAttempt`, `endAttempt`, `dispose`, `validateApp` | Not a function. |
 | any other top-level key | On an object literal, `app` included: declare the app on the target and check it in `validateApp`. A class instance's own fields are not checked. |
-| `perform`, `locate`, `performAt`, `keyboard` | Declared without `observe`. |
+| `readStyle`, `perform`, `locate`, `performAt`, `keyboard` | Declared without `observe`. |
 | `perform`, `actions` | One without the other. An `actions` list that is empty, repeats a kind, or names one outside `LOCATOR_ACTION_KINDS`. |
 | `performAt`, `pointerActions` | One without the other. A `pointerActions` list that is empty, repeats a kind, or names one outside `POINTER_ACTION_KINDS`. |
 | `tapModifiers` | Not a boolean, or `true` without `perform`. |
@@ -119,6 +120,7 @@ The body of one target. Every member but `name`, `version`, and
 | `platform` | `string` |
 | `workers` | `number` |
 | [`observe`](#observation) | method |
+| [`readStyle`](#rendered-node-properties) | method |
 | [`perform`, `actions`](#actions) | method, kinds |
 | [`locate`](#capabilities) | method |
 | [`performAt`, `pointerActions`](#pointer-actions) | method, kinds |
@@ -163,6 +165,8 @@ export interface Engine {
   readonly workers?: number;
   /** capability: observation. */
   observe?(context: OperationContext, options?: EngineObserveOptions): Promise<EngineSnapshot>;
+  /** capability: computed-style, requires observation. Read-only rendered properties of an observation ref. */
+  readStyle?(ref: NodeRef, properties: readonly ComputedStyleProperty[], context: OperationContext): Promise<ComputedStyleValues>;
   /**
    * Performs one action on a ref from the newest observation or `locate`,
    * with the platform's actionability checks. Both agent tools and locator
@@ -361,6 +365,7 @@ member. Three gaps end differently:
 | Member | Capability | Requires | Unlocks |
 | --- | --- | --- | --- |
 | `observe` | `observation` | - | The judgment tier, prompt snapshots, trace replay, the viewport swipe's root. |
+| `readStyle` | `computed-style` | `observe` | Allow-listed rendered properties for read-only project tools. |
 | `perform` + `actions` | `actions` | `observe` | Node actions of the declared kinds, with platform actionability checks. |
 | `locate` | `location` | `observe` | `screen`, `Locator`, `expect(locator)`. |
 | `tapModifiers: true` | - | `perform` | `modifiers` on `tap`, `doubleTap`, and `secondaryTap`. |
@@ -370,7 +375,29 @@ member. Three gaps end differently:
 | `state` | `state` | - | `test.setup` sessions and the `session:` option. |
 | `artifacts` | `artifacts` | - | Screenshots and videos. |
 | `validateApp` | - | - | A config-load check of the target's `app`. |
-| `session` | - | - | The `app` steering methods and the agent's `navigate`, `back`, and `resize_viewport` verbs. |
+| `session` | - | - | The `app` steering methods and the agent's `navigate`, `back`, `resize_viewport`, `switch_tab`, and `close_tab` verbs. |
+
+#### Rendered node properties
+
+`readStyle(ref, properties, context)` returns computed CSS strings for the requested
+properties without changing app state. Its `computed-style` capability requires
+`observe`, and `ref` comes from the newest observation. Return a string for
+every requested property. Throw retryable `NODE_STALE` if the node no longer
+binds. The harness redacts values before returning them to tools.
+
+```ts
+export type ComputedStyleProperty =
+  | 'color' | 'background-color' | 'font-size' | 'font-weight' | 'font-style'
+  | 'text-align' | 'text-decoration-line' | 'display' | 'visibility' | 'opacity';
+
+export type ComputedStyleValues = Readonly<Partial<Record<ComputedStyleProperty, string>>>;
+```
+
+`COMPUTED_STYLE_PROPERTIES` exports the allow-list as a frozen array.
+`validateComputedStyleProperties(properties)` returns a deduplicated copy and
+throws `INVALID_ARGUMENT` for an empty list or a property outside the
+allow-list. Call it before page access.
+See [Project tools](/tools#read-a-nodes-computed-style) for `ToolContext.read`.
 
 #### Agent verbs
 
@@ -396,6 +423,8 @@ An undeclared verb is absent from the toolset.
 | `navigate` | `session.open` |
 | `back` | `session.back` |
 | `resize_viewport` | `session.resize` |
+| `switch_tab` | `session.switchTab` |
+| `close_tab` | `session.closeTab` |
 | `tap_at`, `hover_at` | the `tap` or `hover` kind, in `actions` or in `pointerActions` |
 | `drag_at` | the `dragTo` kind, in `actions` or in `pointerActions` |
 | `type_at` | `fill` or `keyboard` |
@@ -465,6 +494,7 @@ engine. A target with `app.url` has `browser`, and one with `app.bundleId` or
  */
 export type EngineCapability =
   | 'observation'
+  | 'computed-style'
   | 'actions'
   | 'location'
   | 'pointer'
@@ -952,9 +982,15 @@ export interface EngineDisposeContext extends EngineCleanupContext {
 | `viewport` | `ViewportSize` |
 | [`truncated`](#truncated-trees) | `boolean` |
 | `keyboardVisible` | `boolean` |
+| `tabs` | `{ count, active }` |
 | [`treeUnavailable`](#pixel-fallback) | `true` |
 | `pixels` | `ObservationPixels` |
 | `maskedRegionCount` | `number` |
+
+`tabs` reports the open tabs when there is more than one: `count`, and the
+zero-based place of the tab `root` reads, in the order the tabs opened. The
+harness names the tab in every screen header and tells the model when a
+tab opened or the screen moved to another tab. Omit it with one tab.
 
 Return the surface as it is right now. The runner mints the revision and
 stamps it onto every ref. When `pixels` are present, it checks that
@@ -1003,6 +1039,11 @@ export interface EngineSnapshot {
    * engine did not measure it.
    */
   readonly keyboardVisible?: boolean;
+  /**
+   * The tabs the surface has open, when it has more than one, such as a
+   * browser with a tab the app opened. Omit with one tab.
+   */
+  readonly tabs?: { readonly count: number; readonly active: number };
   /** Semantic capture failed; only fresh, independently masked pixels are evidence. */
   readonly treeUnavailable?: true;
   /** Masked pixels, when requested and producible; omitted otherwise. */
@@ -1387,13 +1428,15 @@ export interface EngineAppInfo {
 ### Session
 
 Steering hooks behind the universal `app` fixture and the agent's `navigate`,
-`back`, and `resize_viewport` verbs.
+`back`, `resize_viewport`, `switch_tab`, and `close_tab` verbs.
 
 | Hook | Behind |
 | --- | --- |
 | `open(url)` | `app.open()`, the agent's `navigate` verb, the reopen after `restart` and `reset` |
 | `back()` | `app.back()`, the agent's `back` verb |
 | `resize(size)` | the agent's `resize_viewport` verb; `size` is `{ width, height }` in CSS pixels and holds for the rest of the attempt |
+| `switchTab(index)` | the agent's `switch_tab` verb; `index` is zero-based in the order the tabs opened, as [`tabs`](#observation) counts them. An index with no open tab is `ACTION_FAILED`. |
+| `closeTab(index)` | the agent's `close_tab` verb; `index` counts as for `switchTab`. Closing the tab shown shows another, such as the tab that opened it. An index with no open tab, or the last open tab, is `ACTION_FAILED`. |
 | `restart()` | `app.restart()` |
 | `reset()` | `app.clearState()` |
 
@@ -1428,6 +1471,20 @@ export interface EngineSession {
   back?(context: OperationContext): Promise<void>;
   /** Sets the viewport to `size` in CSS pixels, for this page and every page the attempt opens after it. */
   resize?(size: ViewportSize, context: OperationContext): Promise<void>;
+  /**
+   * Shows the open tab at `index`, zero-based in the order the tabs opened,
+   * as `EngineSnapshot.tabs` counts them: every observation and action after
+   * it reads and acts on that tab. An index with no open tab is an
+   * `ACTION_FAILED` the model reads. Declare it with `tabs` in snapshots.
+   */
+  switchTab?(index: number, context: OperationContext): Promise<void>;
+  /**
+   * Closes the open tab at `index`, counted as `switchTab` counts them. When
+   * it was the tab shown, the engine shows another, such as the tab that
+   * opened it. An index with no open tab, or the last open tab, is an
+   * `ACTION_FAILED` the model reads.
+   */
+  closeTab?(index: number, context: OperationContext): Promise<void>;
   /** Recreates the execution context, keeping persisted state. */
   restart?(context: OperationContext): Promise<void>;
   /** Clears persisted client state and recreates the execution context. */

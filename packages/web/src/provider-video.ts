@@ -6,7 +6,7 @@
  */
 
 import type { Page } from 'playwright-core';
-import { stopProviderRecording, type VideoSegment } from 'e2e/engine';
+import { stopProviderRecording, type VideoSegment } from '@e2e-dev/core/engine';
 import { connectionAbort } from './operation-budget.ts';
 import type { LeaseRecording } from './provider.ts';
 import type { AttemptVideo } from './video.ts';
@@ -46,6 +46,9 @@ export class ProviderVideo implements AttemptVideo {
 
   /** Pages come and go under one recording of the browser. */
   async pageClosing(): Promise<void> {}
+
+  /** Pages come and go under one recording of the browser. */
+  async pageClosed(): Promise<void> {}
 
   /**
    * Stops the recording as the attempt's one segment; nothing when none was

@@ -20,7 +20,7 @@
  */
 
 import path from 'node:path';
-import { collapseText } from '../internal/text.ts';
+import { collapseText } from '@e2e-dev/core/lib/internal/text';
 import type { Report1Document, ReportChanges, ReportError, ReportExplore, ReportExploreFinding, ReportFilter, ReportResult, ReportStep, ReportTarget } from './build.ts';
 import { ENDED_TEXT, orderFindings, SEVERITY_WORDS, stepCountParts } from './explore-text.ts';
 import { filterDecision, formatCost, formatTokens, repeatSuffix, shortCommit, statusBucket, tally, type Counters } from './format.ts';
@@ -45,7 +45,7 @@ import { cell, code, formatDuration, link, MAX_ID_CHARS, MAX_PATH_CHARS, MAX_TIT
 import { outcome, type Outcome } from './outcome.ts';
 import { isExploreVerdict } from './traces.ts';
 import { posixRelative, writeTextReport } from './write.ts';
-import type { Reporter, ReporterSummary } from '../types.ts';
+import type { Reporter, ReporterSummary } from '../run-types.ts';
 
 type ReportRun = Report1Document['run'];
 type ReportArtifact = ReportResult['attempts'][number]['artifacts'][number];
@@ -515,7 +515,15 @@ function exploreHeadline(run: ReportRun, results: readonly ReportResult[], explo
   const warnings = explore.findings.length - issues;
   const counts = [...(issues > 0 ? [plural(issues, 'issue')] : []), ...(warnings > 0 ? [plural(warnings, 'warning')] : [])];
   const summary =
-    counts.length > 0 ? counts.join(', ') : run.status === 'blocked' ? 'explored nothing' : run.status === 'passed' ? 'no findings' : 'did not finish';
+    counts.length > 0
+      ? counts.join(', ')
+      : explore.ended === 'skipped'
+        ? 'nothing to explore'
+        : run.status === 'blocked'
+          ? 'explored nothing'
+          : run.status === 'passed'
+            ? 'no findings'
+            : 'did not finish';
   return `### ${runIcon(run, results)} ${pageName(options)} explore: ${summary}`;
 }
 
@@ -613,7 +621,13 @@ export function renderMarkdownReport(report: Report1Document, options: MarkdownR
     explore === undefined
       ? [errors, ...failures, flaky, repeatsSection(entries, manyTargets), filtersSection(run, manyTargets, leftOut), allTests(groups, selected.length, manyTargets)]
       : [
-          [`**Goal:** ${cell(explore.goal, MAX_GOAL_CHARS)}  `, `**Steps:** ${exploreSteps(explore)}`],
+          [
+            `**Goal:** ${cell(explore.goal, MAX_GOAL_CHARS)}  `,
+            ...(explore.change === undefined
+              ? []
+              : [`**Change:** ${plural(explore.change.files, 'file')} changed since ${code(shortCommit(explore.change.base))}  `]),
+            `**Steps:** ${exploreSteps(explore)}`,
+          ],
           errors,
           ...failures,
           flaky,

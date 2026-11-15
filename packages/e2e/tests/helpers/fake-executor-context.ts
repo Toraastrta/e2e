@@ -5,7 +5,7 @@
  * subject; a tool body that reaches an action is the failure.
  */
 
-import type { ExecutorActions, ExecutorStep, ExecutorVerb, StepExecutorContext } from '../../src/agent/executor.ts';
+import type { ExecutorActions, ExecutorStep, ExecutorVerb, StepExecutorContext } from '@e2e-dev/core/lib/agent/executor';
 
 export interface FakeExecutorContext {
   readonly context: StepExecutorContext;
@@ -49,6 +49,8 @@ export function fakeExecutorContext(options: FakeExecutorContextOptions = {}): F
     navigate: refuse('navigate'),
     back: refuse('back'),
     resize: refuse('resize'),
+    switchTab: refuse('switchTab'),
+    closeTab: refuse('closeTab'),
     tapAt: refuse('tapAt'),
     hoverAt: refuse('hoverAt'),
     dragAt: refuse('dragAt'),
@@ -86,6 +88,7 @@ export function fakeExecutorContext(options: FakeExecutorContextOptions = {}): F
     attachTranscript: () => undefined,
     attachTurns: () => undefined,
     attachScreenshot: async () => 'screenshot',
+    read: refuse('read'),
   };
   return { context, dispatched };
 }

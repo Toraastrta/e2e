@@ -5,13 +5,27 @@
  * `INVALID_CHANGED_SINCE`.
  */
 
-import { ConfigurationError, E2EError } from '../internal/errors.ts';
+import { describeValue } from '@e2e-dev/core/lib/config/validate';
+import { ConfigurationError, E2EError } from '@e2e-dev/core/lib/internal/errors';
 import { COMMIT_HASH, GitFailure, runGit, type GitResult } from '../internal/git.ts';
-import { compareCodePoints } from '../internal/globs.ts';
-import { onDiskPath } from '../internal/paths.ts';
-import { budgetText } from '../internal/time.ts';
+import { compareCodePoints } from '@e2e-dev/core/lib/internal/globs';
+import { onDiskPath } from '@e2e-dev/core/lib/internal/paths';
+import { budgetText } from '@e2e-dev/core/lib/internal/time';
 import { ellipsize } from '../report/format.ts';
-import type { TestFilterChanges } from '../types.ts';
+import type { TestFilterChanges } from '../run-types.ts';
+
+/**
+ * A `changedSince` that is not a string, is empty, or reads as a git option
+ * is `INVALID_CHANGED_SINCE` before git is asked.
+ */
+export function validateChangedSince(ref: unknown): void {
+  if (ref !== undefined && typeof ref !== 'string') {
+    throw new ConfigurationError('INVALID_CHANGED_SINCE', `--changed-since must name a git ref, such as origin/main; got ${describeValue(ref)}`);
+  }
+  if (ref !== undefined && (ref === '' || ref.startsWith('-'))) {
+    throw new ConfigurationError('INVALID_CHANGED_SINCE', `--changed-since must name a git ref, such as origin/main; got ${JSON.stringify(ref)}`);
+  }
+}
 
 /** What `findChanges` asks git from, and when it gives up. */
 interface ChangeOptions {
@@ -23,6 +37,8 @@ interface ChangeOptions {
   readonly signal: AbortSignal;
   /** The most milliseconds every git call together may take; default 30000. */
   readonly budgetMs?: number;
+  /** What the change is for, as an interrupt names it; default `the change the test filters judge`. */
+  readonly purpose?: string;
 }
 
 const GIT_BUDGET_MS = 30_000;
@@ -47,7 +63,7 @@ export async function findChanges(options: ChangeOptions): Promise<TestFilterCha
     return await lookUp(ref, options.cwd, signal);
   } catch (cause) {
     if (options.signal.aborted) {
-      throw new E2EError('interrupted', 'INTERRUPTED', 'interrupted while finding the change the test filters judge');
+      throw new E2EError('interrupted', 'INTERRUPTED', `interrupted while finding ${options.purpose ?? 'the change the test filters judge'}`);
     }
     if (cause instanceof ConfigurationError) throw cause;
     const why = deadline.signal.aborted ? `git did not answer within ${budgetText(budgetMs)}` : cause instanceof GitFailure ? cause.message : String(cause);

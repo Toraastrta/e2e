@@ -33,6 +33,9 @@ import {
   type LocatorAction,
   type LocatorExpression,
   type NodeRef,
+  type ComputedStyleProperty,
+  type ComputedStyleValues,
+  validateComputedStyleProperties,
   type OperationContext,
   type PointerAction,
   type Secret,
@@ -40,11 +43,11 @@ import {
   type VideoSegment,
   type ViewportPoint,
   type ViewportSize,
-} from 'e2e/engine';
-import { matchesText } from 'e2e/engine';
+} from '@e2e-dev/core/engine';
+import { matchesText } from '@e2e-dev/core/engine';
 import { classifyActionError, classifyInputError, dispatchLocatorAction, dispatchPointerAction } from './actions.ts';
 import { BrowserConnection, connectCdp, type BrowserName } from './browser-connection.ts';
-import { AttemptSession, type StorageState } from './attempt-session.ts';
+import { AttemptSession, type AttemptTab, type StorageState } from './attempt-session.ts';
 import type { CdpEndpointResolver } from './cdp-recovery.ts';
 import { LeasedBrowsers, type BrowserProvider, type LeaseDownloads } from './provider.ts';
 import { installAppLog } from './app-log.ts';
@@ -68,6 +71,7 @@ import { RefRegistry } from './refs.ts';
 import {
   cancelled,
   DEFAULT_VIEWPORT,
+  dispatchedInput,
   ErrorLatch,
   invalidState,
   isClassified,
@@ -128,7 +132,7 @@ export interface WebConnectOptions {
    * cancelled or exceeds its budget: a resolver that provisions a session
    * should stop and release it, since a browser that arrives late is detached.
    */
-  readonly cdpEndpoint: (signal: AbortSignal) => string | Promise<string>;
+  readonly cdpEndpoint: CdpEndpointResolver;
   /**
    * Opts into a dedicated persistent remote context. `cdpEndpoint` provisions
    * a fresh browser at each attempt start; this resolver reconnects to that
@@ -137,7 +141,7 @@ export interface WebConnectOptions {
    * Dispatched operations are never retried. The host owns browser cleanup.
    * Context replacement, headers, basicAuth, userAgent, locale, and timezoneId are unavailable in this mode.
    */
-  readonly reconnectEndpoint?: (signal: AbortSignal) => string | Promise<string>;
+  readonly reconnectEndpoint?: CdpEndpointResolver;
 }
 
 /** HTTP basic authentication the browser answers a `401` challenge from the app's origin with. */
@@ -445,14 +449,15 @@ export class PlaywrightSurface {
     const source = this.endpointSource();
     if (source === undefined) return undefined;
     return async () => {
-      const endpoint = await source.resolve(signal);
+      const resolved = await source.resolve(signal);
+      const target = typeof resolved === 'string' ? { endpoint: resolved } : resolved;
       if (signal.aborted) throw cancelled('browser connect cancelled');
-      if (typeof endpoint !== 'string' || endpoint.trim() === '') {
+      if (typeof target?.endpoint !== 'string' || target.endpoint.trim() === '') {
         throw new EngineError('ENGINE_FAILURE', `${source.name} resolved to an empty CDP endpoint`, {
           retryable: false,
         });
       }
-      const browser = await connectCdp(endpoint, BROWSER_LAUNCH_TIMEOUT_MS);
+      const browser = await connectCdp(target, BROWSER_LAUNCH_TIMEOUT_MS);
       if (signal.aborted) {
         await browser.close().catch(() => undefined);
         throw cancelled('browser connect cancelled');
@@ -473,7 +478,7 @@ export class PlaywrightSurface {
   }
 
   /** The endpoint of the lease the worker holds; only reached with a provider. */
-  private leaseEndpoint(signal: AbortSignal): Promise<string> {
+  private leaseEndpoint(signal: AbortSignal): ReturnType<LeasedBrowsers['endpoint']> {
     if (this.leases === undefined) throw invalidState('no browser provider is configured');
     return this.leases.endpoint(signal);
   }
@@ -493,8 +498,12 @@ export class PlaywrightSurface {
       return { provision: connect.cdpEndpoint, reconnect: connect.reconnectEndpoint, usedContexts };
     }
     if (this.leases?.scope !== 'attempt') return undefined;
-    const lease = await this.leases.startAttempt(context);
-    return { provision: () => lease.cdpEndpoint, reconnect: () => lease.reconnectEndpoint ?? lease.cdpEndpoint };
+    const leases = this.leases;
+    const lease = await leases.startAttempt(context);
+    return {
+      provision: (signal) => leases.cdpTarget(lease, signal),
+      reconnect: (signal) => leases.cdpTarget(lease, signal, lease.reconnectEndpoint ?? lease.cdpEndpoint),
+    };
   }
 
   /** Opens one attempt owner before setup starts, so cleanup can cancel pending attachment. */
@@ -761,6 +770,49 @@ export class PlaywrightSurface {
     ));
   }
 
+  /** Shows the open tab at `index`, in opening order, for the agent's `switchTab` verb, and shows the screen after it. */
+  switchTab(index: number, operation: OperationContext): Promise<void> {
+    return this.acted(operation, this.guard(operation, 'switch tab', () => this.requireSession().showTabAt(index)));
+  }
+
+  /** Closes the open tab at `index`, in opening order, for the agent's `closeTab` verb, and shows the screen after it. */
+  closeTabAt(index: number, operation: OperationContext): Promise<void> {
+    return this.acted(operation, this.guard(operation, 'close tab', () => this.requireSession().closeTabAt(index)));
+  }
+
+  // --- tabs shared with the browser fixture ---
+
+  /** The attempt's open tabs, in the order they opened. */
+  tabs(): readonly AttemptTab[] {
+    this.latch.throwPending();
+    return this.requireSession().openTabs();
+  }
+
+  /** The tab the attempt shows, if one is open. */
+  shownTab(): AttemptTab | undefined {
+    return this.session?.shownTab();
+  }
+
+  /** Shows one of the attempt's tabs (`BrowserTab.activate`). */
+  showTab(tab: AttemptTab, operation: OperationContext): Promise<void> {
+    return this.guard(operation, 'tab', () => this.requireSession().showTab(tab));
+  }
+
+  /** Opens a blank tab in the attempt's context and shows it (`browser.newTab`). */
+  newTab(operation: OperationContext): Promise<AttemptTab> {
+    return this.guard(operation, 'tab', () => this.requireSession().newTab());
+  }
+
+  /** Closes one of the attempt's tabs (`BrowserTab.close`); the tab shown next is shown before it resolves. */
+  closeTab(tab: AttemptTab, operation: OperationContext): Promise<void> {
+    return this.guard(operation, 'tab', () => this.requireSession().closeTab(tab));
+  }
+
+  /** Waits for the next tab the app opens and shows it (`browser.waitForPopup`). */
+  nextPopup(signal: AbortSignal): ReturnType<AttemptSession['nextPopup']> {
+    return this.requireSession().nextPopup(signal);
+  }
+
   /** Sets the viewport for the agent's `resize` verb, as `browser.setViewport` does, and shows the screen after it. */
   resize(size: ViewportSize, operation: OperationContext): Promise<void> {
     return this.acted(operation, this.guard(operation, 'resize', () => this.setViewport(size)));
@@ -821,6 +873,26 @@ export class PlaywrightSurface {
     });
   }
 
+  /** Reads computed styles from the element an observation ref names, without input or actionability waits. */
+  async readStyle(ref: NodeRef, properties: readonly ComputedStyleProperty[], operation: OperationContext): Promise<ComputedStyleValues> {
+    const requested = validateComputedStyleProperties(properties);
+    return this.guard(operation, 'read computed style', async (currentOperation) => {
+      const target = await this.requireSession().refs.lookup(ref);
+      if (target.kind !== 'element') {
+        throw new EngineError('NODE_STALE', `node reference ${ref.id} is not from an observation`, { retryable: false });
+      }
+      currentOperation.signal.throwIfAborted();
+      const style = await target.element.evaluate((element, names) => {
+        const view = element.ownerDocument.defaultView;
+        if (!element.isConnected || view === null) return null;
+        const computed = view.getComputedStyle(element);
+        return Object.fromEntries(names.map((name) => [name, computed.getPropertyValue(name)]));
+      }, requested);
+      if (style === null) throw new EngineError('NODE_STALE', 'node is detached; observe again before reading', { retryable: true });
+      return style;
+    }, navigationStaleOr);
+  }
+
   // --- location tier ---
 
   /**
@@ -836,15 +908,33 @@ export class PlaywrightSurface {
     return this.guard(
       operation,
       'locate',
-      async (currentOperation) => {
+      (currentOperation) => this.readingTab(async () => {
         try {
           return await this.locateNow(expression, currentOperation);
         } catch (cause) {
           throw (await pageScriptFailure(this.frameScope(expression), cause, 'locate', currentOperation.timeoutMs)) ?? cause;
         }
-      },
+      }),
       staleOr,
     );
+  }
+
+  /**
+   * Runs a read of the tab the attempt shows. A tab the app closes under the
+   * read makes it stale, as a navigation does: nothing was dispatched, and
+   * the read repeats on the tab shown next.
+   */
+  private async readingTab<T>(read: () => Promise<T>): Promise<T> {
+    const session = this.session;
+    const page = this.openPage();
+    try {
+      return await read();
+    } catch (cause) {
+      if (page !== undefined && session?.tabClosed(page) === true) {
+        throw new EngineError('NODE_STALE', 'the tab closed while it was read', { retryable: true, cause });
+      }
+      throw cause;
+    }
   }
 
   /** The body of `locate`, inside its guard. */
@@ -963,10 +1053,17 @@ export class PlaywrightSurface {
           this.requireSession().requireObservation();
           return performViewportSwipe(page, action.direction, action.momentum ?? 'none');
         }
-        const { refs } = this.requireSession();
-        return refs.lookup(ref).then((target) => {
+        const session = this.requireSession();
+        const { refs } = session;
+        return refs.lookup(ref).then(async (target) => {
           currentOperation.signal.throwIfAborted();
-          return dispatchLocatorAction(target, action, currentOperation, (other) => refs.lookup(other));
+          try {
+            await dispatchLocatorAction(target, action, currentOperation, (other) => refs.lookup(other));
+          } catch (cause) {
+            // The input went out and its own tab closed: closing was what it did.
+            if (dispatchedInput(cause) && session.tabClosed(page)) return;
+            throw cause;
+          }
         });
       },
       (cause) => classifyActionError(cause, action),
@@ -1228,7 +1325,7 @@ export class PlaywrightSurface {
     return this.guard(
       operation,
       'observe',
-      (currentOperation) => this.captureObservation(currentOperation, options),
+      (currentOperation) => this.readingTab(() => this.captureObservation(currentOperation, options)),
       navigationStaleOr,
     );
   }
@@ -1264,12 +1361,20 @@ export class PlaywrightSurface {
       }
       refs.publish(capture, captured);
       session.observedGeneration(token);
-      return snapshot;
+      return withTabs(snapshot, session);
     } catch (cause) {
       RefRegistry.dispose(generation);
       throw cause;
     }
   }
+}
+
+/** The snapshot with the attempt's tabs, when more than one is open; the snapshot as is otherwise. */
+function withTabs(snapshot: EngineSnapshot, session: AttemptSession): EngineSnapshot {
+  const tabs = session.openTabs();
+  const shown = session.shownTab();
+  const active = shown === undefined ? -1 : tabs.indexOf(shown);
+  return tabs.length < 2 || active === -1 ? snapshot : { ...snapshot, tabs: { count: tabs.length, active } };
 }
 
 /**

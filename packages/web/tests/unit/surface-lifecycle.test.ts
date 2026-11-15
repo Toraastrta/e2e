@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Browser, Dialog, Route } from 'playwright-core';
 import { secrets } from 'e2e';
-import type { EngineFixtureContext, OperationContext } from 'e2e/engine';
+import type { EngineFixtureContext, OperationContext } from '@e2e-dev/core/engine';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PlaywrightSurface } from '../../src/surface.ts';
 import { createBrowserFixture } from '../../src/browser.ts';
@@ -33,6 +33,9 @@ beforeEach(async () => {
   press = vi.fn(async (_key: string) => undefined);
   type = vi.fn(async (_text: string) => undefined);
   const page = {
+    // The tab listeners the session installs on every page it shows.
+    on: () => undefined,
+    once: () => undefined,
     isClosed: () => false,
     close: async () => undefined,
     goto: async () => undefined,

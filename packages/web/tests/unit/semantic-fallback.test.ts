@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Browser, JSHandle, Page } from 'playwright-core';
-import { EngineError, TestError, type OperationContext } from 'e2e/engine';
+import { EngineError, TestError, type OperationContext } from '@e2e-dev/core/engine';
 import { ElementList } from '../../src/element-list.ts';
 import { captureDocument, ROOT_NODE_ID } from '../../src/observation.ts';
 import { PlaywrightSurface } from '../../src/surface.ts';
@@ -27,6 +27,9 @@ async function setup() {
   ];
   const screenshot = vi.fn(async (_options: unknown) => Buffer.from([1, 2, 3]));
   const page = {
+    // The tab listeners the session installs on every page it shows.
+    on: () => undefined,
+    once: () => undefined,
     isClosed: () => false,
     waitForLoadState: async () => undefined,
     viewportSize: () => ({ width: 100, height: 80 }),

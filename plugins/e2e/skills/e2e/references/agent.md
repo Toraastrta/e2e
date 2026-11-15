@@ -156,6 +156,14 @@ The tools, one per engine action. Name the target as the screen names it
 - `resize_viewport`: set the viewport size (200 to 4096 CSS px) to check a
   layout at phone, tablet, or desktop width. Engines with `session.resize`,
   such as web.
+- `switch_tab`: show another open tab by its number (from 1, in opening
+  order). A tab the app opens stays in the background: the action's result
+  says so, and the screen header says `tab 1 of 2`. Engines with
+  `session.switchTab`, such as web.
+- `close_tab`: close an open tab by the same number. Closing the tab on
+  screen returns the screen to its opener, or to the tab shown most
+  recently when the opener is closed too. The last open tab stays open.
+  Engines with `session.closeTab`, such as web.
 - `type_secret`: a declared secret by name; plaintext never reaches the model.
   Offered only when the step declares secrets and the engine can fill them.
 - `screenshot`: attach viewport pixels; every later result then carries one.
@@ -358,6 +366,9 @@ there with `browser.frameLocator`, and judge it with `vision`. Nothing the
 model returns runs as code or
 selectors: the runner validates and authorizes every tool call first.
 
+Project tool results and tool or engine errors are secret-redacted before the
+model reads them. Text is redacted before it is cut to the output limit.
+
 ## Budgets and cost
 
 | Call | Model calls | Default timeout |
@@ -449,7 +460,8 @@ npx unbox-ai summary .e2e/ai-trace.json --run 0             # turns, tokens, too
 
 Never read the trace directly: megabytes of resent context, images replaced
 by byte counts. `--no-cache` traces the whole flow, since replayed steps
-make no model calls.
+make no model calls. The recorder redacts serialized tool results and errors
+before writing the AI trace.
 
 ## Make the agent yours
 
@@ -474,6 +486,12 @@ make no model calls.
 - `tools: { seedCart }` on an agents entry adds AI SDK tools wrapped with
   `defineTool(tool({ ... }), { mutates: true })` from `e2e/agent` for a
   test API a flow calls mid-step.
+- A `mutates: false` tool can call `getToolContext(options).read({ id },
+  { style: ['color', 'font-weight'] })` for a node in its newest observation.
+  Web reads return redacted `{ style }` under the step deadline, use no action
+  slot, and never relocate stale IDs. Use `requires: ['computed-style']` to
+  skip engines without support. Allowed properties and errors:
+  https://e2e.com/docs/tools#read-a-nodes-computed-style.
 - `createToolLoopExecutor` keeps the loop and replaces prompt and tool
   vocabulary; spread `createGrammarTools(ctx, { guard })` into its tools and
   start its `system` with `BASE_RULES` to keep the built-in actions.

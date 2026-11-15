@@ -2,8 +2,8 @@
 
 import { setTimeout } from 'node:timers/promises';
 import type { ElementHandle, FrameLocator, Locator as PwLocator, Mouse, Page } from 'playwright-core';
-import { EngineError, withinCleanupBudget, type EngineCleanupContext, type Momentum, type ScrollDirection, type ViewportPoint, type ViewportSize } from 'e2e/engine';
-import { ConfigurationError, InfrastructureError, TestError } from 'e2e/engine';
+import { EngineError, withinCleanupBudget, type EngineCleanupContext, type Momentum, type ScrollDirection, type ViewportPoint, type ViewportSize } from '@e2e-dev/core/engine';
+import { ConfigurationError, InfrastructureError, TestError } from '@e2e-dev/core/engine';
 
 export const DEFAULT_VIEWPORT = { width: 1280, height: 720 } as const;
 
@@ -329,6 +329,16 @@ export function isTestErrorCode(cause: unknown, code: string): cause is Error & 
  */
 export const POST_DISPATCH_PATTERN =
   /^\s*- (performing \w+ action|[\w ]+ action done|waiting for scheduled navigations to finish)\s*$/im;
+
+/**
+ * Whether a failed Playwright action had dispatched its input, read from its
+ * call log: in the message for a timeout, in `log` for an error such as a
+ * page closing under the action.
+ */
+export function dispatchedInput(cause: unknown): boolean {
+  const log = typeof cause === 'object' && cause !== null && 'log' in cause && Array.isArray(cause.log) ? cause.log : [];
+  return POST_DISPATCH_PATTERN.test([message(cause), ...log.filter((line): line is string => typeof line === 'string')].join('\n'));
+}
 
 /** Translates an unexpected Playwright error at the contract boundary. */
 export function translatePwError(cause: unknown, operation: string): Error {

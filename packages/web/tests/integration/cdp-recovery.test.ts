@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { chromium } from 'playwright-core';
-import type { EngineFixtureContext, EngineHandle, OperationContext } from 'e2e/engine';
+import type { EngineFixtureContext, EngineHandle, OperationContext } from '@e2e-dev/core/engine';
 import { web as webEngine, surfaceOf, type WebConnectOptions, type WebOptions, type Browser } from '../../src/index.ts';
 import { closeRemoteChrome, launchRemoteChrome, type RemoteChrome } from '../helpers/cdp-host.ts';
 import { startFixtureApp, type FixtureApp } from '../helpers/fixture-app.ts';
@@ -264,6 +264,21 @@ describe('CDP session recovery', () => {
       await engine.dispose!(cleanup());
       await closeRemoteChrome(remote);
     }
+  }, 60_000);
+
+  it('keeps a tab the app opened in the background across a reconnect', async () => {
+    const remote = await host();
+    const engine = await start({ cdpEndpoint: () => remote.endpoint, reconnectEndpoint: () => remote.endpoint });
+    const browser = fixtureOf(engine);
+    await browser.evaluate(`void window.open(${JSON.stringify(`${app.url}/login`)}, '_blank')`);
+    await expect.poll(() => browser.tabs().length).toBe(2);
+    const [own, background] = browser.tabs();
+    await surfaceOf(engine)!.context().browser()!.close();
+    await engine.observe!(operation());
+    expect(browser.tabs()).toEqual([own, background]);
+    expect(own!.isActive()).toBe(true);
+    await background!.activate();
+    expect(await browser.url()).toBe(`${app.url}/login`);
   }, 60_000);
 
   it('bounds a hung reconnect resolver and propagates cancellation to it', async () => {

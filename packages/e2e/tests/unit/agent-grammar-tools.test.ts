@@ -7,11 +7,11 @@
 import type { ToolSet } from 'ai';
 import { z } from 'zod';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { aiSdk, loadAiSdk } from '../../src/agent/ai-sdk.ts';
-import { GRAMMAR_TOOL_NAMES } from '../../src/agent/action-names.ts';
-import { createGrammarTools, createVerdictTool } from '../../src/agent/primitives.ts';
-import { createBuiltInAgent, projectTools } from '../../src/agent/default-agent.ts';
-import { defineTool } from '../../src/agent/tool.ts';
+import { aiSdk, loadAiSdk } from '@e2e-dev/core/lib/agent/ai-sdk';
+import { GRAMMAR_TOOL_NAMES } from '@e2e-dev/core/lib/agent/action-names';
+import { createGrammarTools, createVerdictTool } from '@e2e-dev/core/lib/agent/primitives';
+import { createBuiltInAgent, projectTools } from '@e2e-dev/core/lib/agent/default-agent';
+import { defineTool } from '@e2e-dev/core/lib/agent/tool';
 import { fakeExecutorContext } from '../helpers/fake-executor-context.ts';
 import { installFakeLoopModel } from '../helpers/fake-loop-model.ts';
 
@@ -48,6 +48,8 @@ const ACCEPTED: Readonly<Record<string, Record<string, unknown>>> = {
   navigate: { url: '/about' },
   back: {},
   resize_viewport: { width: 390, height: 844 },
+  switch_tab: { tab: 2 },
+  close_tab: { tab: 2 },
   screenshot: {},
   tap_at: { x: 10, y: 20 },
   hover_at: { x: 10, y: 20 },
@@ -121,6 +123,22 @@ describe('the grammar tools have closed schemas', () => {
     expect(resize.safeParse({ width: 100, height: 844 }).success).toBe(false);
     expect(resize.safeParse({ width: 390, height: 5000 }).success).toBe(false);
     expect(resize.safeParse({ width: 390 }).success).toBe(false);
+  });
+
+  it('offers switch_tab only with the switchTab verb, by a whole tab number from 1', () => {
+    expect(Object.keys(createGrammarTools(fakeExecutorContext({ verbs: ['tap', 'back'] }).context))).not.toContain('switch_tab');
+    const switchTab = schemaOf(createGrammarTools(fakeExecutorContext({ verbs: ['switchTab'] }).context), 'switch_tab');
+    expectClosed(switchTab, { tab: 2 }, 'switch_tab');
+    expect(switchTab.safeParse({ tab: 0 }).success).toBe(false);
+    expect(switchTab.safeParse({ tab: 1.5 }).success).toBe(false);
+  });
+
+  it('offers close_tab only with the closeTab verb, by a whole tab number from 1', () => {
+    expect(Object.keys(createGrammarTools(fakeExecutorContext({ verbs: ['switchTab'] }).context))).not.toContain('close_tab');
+    const closeTab = schemaOf(createGrammarTools(fakeExecutorContext({ verbs: ['closeTab'] }).context), 'close_tab');
+    expectClosed(closeTab, { tab: 2 }, 'close_tab');
+    expect(closeTab.safeParse({ tab: 0 }).success).toBe(false);
+    expect(closeTab.safeParse({ tab: 1.5 }).success).toBe(false);
   });
 
   it('closes complete_step', () => {

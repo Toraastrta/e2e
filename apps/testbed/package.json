@@ -20,16 +20,17 @@
     "explore:bench": "node scripts/explore-bench.mjs"
   },
   "dependencies": {
+    "@e2e-dev/browser-run": "workspace:*",
     "@e2e-dev/decision": "workspace:*",
     "@e2e-dev/lightpanda": "workspace:*",
     "@e2e-dev/web": "workspace:*",
     "e2e": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/devtools": "1.0.73",
+    "@ai-sdk/devtools": "1.0.76",
     "@napi-rs/image": "1.16.0",
     "@types/node": "26.6.6",
-    "ai": "7.0.170",
+    "ai": "7.0.173",
     "typescript": "7.0.2",
     "zod": "4.6.7"
   }

@@ -24,11 +24,12 @@ export type {
   BrowserReleaseContext,
   BrowserRequest,
 } from './provider.ts';
-export type { BrowserName } from './browser-connection.ts';
+export type { BrowserName, CdpTarget } from './browser-connection.ts';
 export type { Dialog, DialogHandler } from './dialogs.ts';
 export type {
   Browser,
   BrowserExpectation,
+  BrowserTab,
   Cookie,
   CookieFields,
   CookieFilter,

@@ -9,12 +9,12 @@
 
 import path from 'node:path';
 import type { ExploreBudgets, ExploreProgress, OpenedStep } from '../explore/progress.ts';
-import type { SerializedError } from '../internal/errors.ts';
-import { collapseText } from '../internal/text.ts';
+import type { SerializedError } from '@e2e-dev/core/lib/internal/errors';
+import { collapseText } from '@e2e-dev/core/lib/internal/text';
 import type { ReportExplore, ReportExploreFinding, ReportExploreStep } from '../report/build.ts';
-import type { ArtifactRecord } from '../run/records.ts';
+import type { ArtifactRecord } from '@e2e-dev/core/lib/run/records';
 import { ENDED_TEXT, orderFindings, SEVERITY_WORDS, stepCountParts } from './explore-text.ts';
-import type { StepEvent } from '../run/steps.ts';
+import type { StepEvent } from '@e2e-dev/core/lib/run/steps';
 import {
   bounded,
   F_CHECK,
@@ -318,7 +318,7 @@ export class ExploreView {
   record(badge: string, withSteps: boolean): string[] {
     const { pc } = this;
     const lines = withSteps ? ['', this.header(badge, 'Explored'), ...this.steps.flatMap((step) => this.stepLines(step))] : [];
-    if (this.steps.length === 0) lines.push(`${ROW_INDENT}${pc.dim('no step ran')}`);
+    if (this.steps.length === 0 && this.ended !== 'skipped') lines.push(`${ROW_INDENT}${pc.dim('no step ran')}`);
     lines.push(`${ROW_INDENT}${pc.dim(`ended: ${ENDED_TEXT[this.ended ?? 'aborted']}`)}`);
     return lines;
   }

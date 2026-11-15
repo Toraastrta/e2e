@@ -142,7 +142,7 @@ export function context(options: {
     navigate: vi.fn<ExecutorActions['navigate']>().mockResolvedValue(undefined),
     doubleTap: noop, longPress: noop, secondaryTap: noop, hover: noop,
     drag: noop, scrollTo: noop, scrollUntil: noop, upload: noop,
-    typeText: noop, pressKey: noop, dismissKeyboard: noop, resize: noop,
+    typeText: noop, pressKey: noop, dismissKeyboard: noop, resize: noop, switchTab: noop, closeTab: noop,
     tapAt: vi.fn<ExecutorActions['tapAt']>().mockImplementation(async (point) => ({ point, summary: 'tap' })),
     hoverAt: vi.fn<ExecutorActions['hoverAt']>().mockImplementation(async (point) => ({ point, summary: 'hover' })),
     dragAt: vi.fn<ExecutorActions['dragAt']>().mockImplementation(async (from, to) => ({ from, to, summary: 'drag' })),
@@ -167,6 +167,7 @@ export function context(options: {
     attachTranscript: (text) => { transcripts.push(text); }, attachTurns: (seen) => { turns.push(...seen); }, attachScreenshot: async () => 'screenshot',
     budgets: { maxActions: 25, maxModelCalls: options.maxModelCalls ?? 25, remainingMs: () => 60000, actionsUsed: () => 0, recordModelCall: (call) => { usage.push(call ?? {}); }, runTool: (_call, body) => body() },
     ...(options.replayedPrefix === undefined ? {} : { replayedPrefix: options.replayedPrefix }),
+    read: async () => { throw new Error('unexpected style read'); },
   };
   return { ctx, usage, observe, actions, turns, transcripts };
 }

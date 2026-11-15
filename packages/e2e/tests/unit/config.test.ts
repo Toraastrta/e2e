@@ -3,11 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { discoverConfig } from '../../src/config/load.ts';
-import { isCiMode, resolveConfig, type CliOverrides } from '../../src/config/resolve.ts';
-import { ConfigurationError, defineEngine } from '../../src/engine/index.ts';
-import { protocolEngine } from '../../src/engine/protocol/client.ts';
-import { secrets } from '../../src/secrets.ts';
-import type { CommandConfig, E2EConfig, Target, TargetApp, TestFilter } from '../../src/types.ts';
+import { isCiMode, type CliOverrides } from '@e2e-dev/core/lib/config/resolve';
+import { resolveConfig } from '../../src/config/resolve-run.ts';
+import { ConfigurationError, defineEngine } from '@e2e-dev/core/lib/engine/index';
+import { protocolEngine } from '@e2e-dev/core/lib/engine/protocol/client';
+import { secrets } from '@e2e-dev/core/lib/secrets';
+import type { CommandConfig, Target, TargetApp } from '@e2e-dev/core/lib/types';
+import type { E2EConfig, TestFilter } from '../../src/run-types.ts';
 import { snapshot } from '../helpers/snapshot.ts';
 import { invalid } from '../helpers/invalid.ts';
 
@@ -242,6 +244,15 @@ describe('resolveConfig', () => {
       'timeout must be a positive safe integer of milliseconds, got "30s"',
     );
     expect(() => resolve({ launchTimeout: 0 })).toThrow('launchTimeout must be a positive safe integer of milliseconds, got 0');
+  });
+
+  it('rejects config timeouts a timer cannot wait for', () => {
+    for (const key of ['timeout', 'launchTimeout', 'actionTimeout', 'assertionTimeout', 'cleanupTimeout'] as const) {
+      expect(resolve({ [key]: 2 ** 31 - 1 })[key]).toBe(2 ** 31 - 1);
+      expect(() => resolve({ [key]: 2 ** 31 })).toThrow(
+        expect.objectContaining({ code: 'INVALID_CONFIG', message: `${key} must be at most 2147483647 milliseconds, got 2147483648` }),
+      );
+    }
   });
 
   it('accepts a command only beside a URL to poll, and defaults readyUrl to it', () => {
@@ -1006,6 +1017,18 @@ describe('resolveConfig', () => {
         );
       }
       expect(commandOf({ url: APP_URL, command: { executable: 'x', startupTimeout: 5_000, shutdownTimeout: 500 } }).command).toMatchObject({ startupTimeout: 5_000, shutdownTimeout: 500 });
+    });
+
+    it('rejects timeouts a timer cannot wait for', () => {
+      for (const key of ['startupTimeout', 'shutdownTimeout'] as const) {
+        expect(commandOf({ url: APP_URL, command: { executable: 'x', [key]: 2 ** 31 - 1 } }).command).toMatchObject({ [key]: 2 ** 31 - 1 });
+        expect(() => resolveApp({ url: APP_URL, command: { executable: 'x', [key]: 2 ** 31 } })).toThrow(
+          expect.objectContaining({
+            code: 'INVALID_CONFIG',
+            message: `target "web" app.command.${key} must be at most 2147483647 milliseconds, got 2147483648`,
+          }),
+        );
+      }
     });
 
   });

@@ -2,13 +2,13 @@
  * The agent-device engine for e2e: a mobile body built with the
  * public `defineEngine`, validated by the same rules and graded by the same
  * capabilities as any other engine. Core imports nothing from here; this
- * package imports the contract from `e2e/engine` and contributes the
+ * package imports the contract from `@e2e-dev/core/engine` and contributes the
  * `device` fixture the way the browser engine contributes `browser`.
  */
 
 import { createRequire } from 'node:module';
 import { createAgentDeviceClient } from 'agent-device';
-import { ConfigurationError, defineEngine, obj, type EngineAppCheckInfo, type EngineAppDeclaration, type EngineHandle } from 'e2e/engine';
+import { ConfigurationError, defineEngine, obj, type EngineAppCheckInfo, type EngineAppDeclaration, type EngineHandle } from '@e2e-dev/core/engine';
 import { createDeviceFixture } from './device.ts';
 import type { ClientFactory, MobileOptions, MobilePlatform } from './options.ts';
 import { isLink } from './links.ts';
@@ -34,28 +34,28 @@ export function buildEngine(surface: AgentDeviceSurface): EngineHandle {
     dispose: (context) => surface.dispose(context),
     // The harness signal does not abort at an operation's budget, so each
     // operation enforces its own; see InputBudget in support.ts.
-    observe: (operation, options) => surface.observe(operation, options, surface.inputBudget('observe', operation.timeoutMs)),
-    locate: (expression, operation) => surface.locate(expression, operation, surface.inputBudget('locate', operation.timeoutMs)),
-    perform: (ref, action, operation) => surface.perform(ref, action, operation, surface.inputBudget(action.kind, operation.timeoutMs)),
+    observe: (operation, options) => surface.observe(operation, options, surface.inputBudget('observe', operation)),
+    locate: (expression, operation) => surface.locate(expression, operation, surface.inputBudget('locate', operation)),
+    perform: (ref, action, operation) => surface.perform(ref, action, operation, surface.inputBudget(action.kind, operation)),
     actions: DEVICE_ACTIONS,
-    performAt: (point, action, operation) => surface.performAt(point, action, operation, surface.inputBudget(action.kind, operation.timeoutMs)),
+    performAt: (point, action, operation) => surface.performAt(point, action, operation, surface.inputBudget(action.kind, operation)),
     pointerActions: DEVICE_POINTER_ACTIONS,
     keyboard: {
-      type: (text, keyboardOptions, operation) => surface.typeText(text, keyboardOptions, operation, surface.inputBudget('type', operation.timeoutMs)),
-      press: (key, operation) => surface.pressFocusedKey(key, operation, surface.inputBudget('press', operation.timeoutMs)),
-      dismiss: (operation) => surface.dismissKeyboard(operation.signal, surface.inputBudget('keyboard dismiss', operation.timeoutMs)),
+      type: (text, keyboardOptions, operation) => surface.typeText(text, keyboardOptions, operation, surface.inputBudget('type', operation)),
+      press: (key, operation) => surface.pressFocusedKey(key, operation, surface.inputBudget('press', operation)),
+      dismiss: (operation) => surface.dismissKeyboard(operation.signal, surface.inputBudget('keyboard dismiss', operation)),
     },
     validateApp: (app, info) => validateApp(app, info, surface.options.platform),
     // No `open`: a device app has no URL to open, so the runner serves
     // `app.open()` with `restart`, the fresh launch of the pinned app, which
     // is also the device's "recreate the context".
     session: {
-      back: (operation) => surface.back(operation, surface.inputBudget('back', operation.timeoutMs)),
+      back: (operation) => surface.back(operation, surface.inputBudget('back', operation)),
       restart: (operation) => surface.restart(operation),
       reset: (operation) => surface.reset(operation),
     },
     artifacts: {
-      screenshot: (label, operation) => surface.screenshot(label, operation, surface.inputBudget('screenshot', operation.timeoutMs)),
+      screenshot: (label, operation) => surface.screenshot(label, operation, surface.inputBudget('screenshot', operation)),
       startVideo: (operation) => surface.startVideo(operation),
       stopVideo: (operation) => surface.stopVideo(operation),
     },

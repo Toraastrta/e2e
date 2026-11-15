@@ -652,14 +652,14 @@ Test files, directories, or globs relative to the project root:
 | `--strict-cache` | Turns on `cache.strict` for this run. A step whose recording exists but no longer replays fails with `REPLAY_STALE` instead of handing off to the agent. Retries replay too, and the run never writes the cache. See [Fail on a stale recording](/cache#fail-on-a-stale-recording). |
 | `-u`, `--update-snapshots` | Writes each stored screenshot [`toHaveScreenshot`](/reference/expect#screenshot-matchers) finds missing or different, and passes the matcher. Without it, a missing one is written and fails; in CI it is only attached to the results. |
 | `-w`, `--watch` | Runs, then reruns when a test file or the config changes, or on a key. See [Watch mode](#watch-mode). |
-| `--step` | Runs the first step, then holds each later step until a key at its prompt: Enter runs it, `n` runs the rest of the test, `a` the rest of the run, `h` lists the keys, `q` stops with exit 130. Held time counts toward no timeout. Runs one worker; needs a terminal; refused in CI, with `--watch`, `--workers` above 1, and the json reporter (exit 2). See [Step through a test](/debugging#step-through-a-test). |
+| `--step` | Runs the first step, then holds each later step until a key at its prompt: Enter runs it, `n` runs the rest of the test, `a` the rest of the run, `h` lists the keys, `q` stops with exit 130. Held time counts toward no timeout. Without a terminal, the run goes on in the background and each command returns at the next held step with its screen: `--step next` runs it, `--step rest` runs the rest, `--step stop` ends the run. Runs one worker; refused in CI, with `--watch`, `--workers` above 1, and the json reporter (exit 2). See [Step through a test](/debugging#step-through-a-test) and [without a terminal](/debugging#step-through-a-test-without-a-terminal). |
 
 **Output**
 
 | Option | Description |
 | --- | --- |
 | `--reporter <ids>` | Replaces the built-in IDs in `config.reporters`, comma-separated: `list`, `json`, `junit`, `markdown`. Default: the config. `json` with `list` is `INVALID_CONFIG`. [Reporter objects](/reference/reporters) in the config keep running. |
-| `--output <dir>` | The results directory for this run, over the config's [`output`](/reference/config#output): the report, the reporter files, the AI trace, `results/`, and `sessions/`. Default: the config, else `.e2e`. Resolved from the project root; a directory the run cannot own is `INVALID_CONFIG`. `results/` is cleared once the tests start; a `--last-failed` rerun keeps what the previous report names. |
+| `--output <dir>` | The results directory for this run, over the config's [`output`](/reference/config#output): the report, the reporter files, the AI trace, `results/`, and `sessions/`. Default: the config, else `.e2e`. Resolved from the project root, and must be a directory inside it, not the root itself; that and the other directories the run cannot own (listed there) are `INVALID_CONFIG`. `results/` is cleared once the tests start; a `--last-failed` rerun keeps what the previous report names. |
 | `--cache-dir <dir>` | The replay cache directory for this run, over [`E2E_CACHE_DIR`](/reference/environment#replay-cache) and [`cache.dir`](/reference/config#cache). Default: `E2E_CACHE_DIR`, else `cache.dir`, else `.e2e/cache`. Resolved from the project root; `~` or a leading `~/` is the home directory. The cache mode stays as configured. With a custom `cache.store` it is `INVALID_CONFIG`. |
 | `--timings <file>` | The [timings history](/ci#cache-the-timings-history) to update when the run ends, over `<output>/timings.json`. With more than one worker, files with no recorded time start first, then the rest longest first. Resolved from the project root. A missing or invalid file is no history, never an error. |
 | `--debug` | Phase timings and an agent step table on stderr after the run; see [Debug output](#debug-output). |
@@ -939,6 +939,7 @@ bunx e2e explore 'Hunt for broken forms and dead links' --agent thorough --video
 | `--target <id>` | The one target to explore. Default: the first configured target; with several targets and no flag, it explores the first and says so on stderr. An unknown name is `UNKNOWN_TARGET`. |
 | `--agent <name>` | The configured agent to explore as. Default: `default`. Its model, `system`, tools, and context are reused. The built-in agent replaces a hand-rolled `StepExecutor`, with a notice. An entry with no model, a custom executor's included, is `MODEL_UNAVAILABLE` before anything starts. An unknown name is `INVALID_CONFIG`. |
 | `--session <name>` | Starts signed in. The setup test in the config's test files that declares this session runs first. The exploration restores what it saved, as a test with `{ session }` does. No other test runs. A name no setup test declares is `COLLECTION_ERROR`, naming the declared ones, before any app process starts. See [Start signed in](/explore#start-signed-in). |
+| `--changed-since <ref>` | Explores the change since the merge base of the ref and HEAD. The planner reads its commit messages and committed diff. With no goal, the goal is `Explore what this change affects and find bugs in it`, and the planner can skip a change no user can see; the run ends `skipped` and passes. An empty ref, one starting with `-`, or one git can't measure from is `INVALID_CHANGED_SINCE`. The report records the change as `run.explore.change`. See [Explore a pull request's change](/explore#explore-a-pull-requests-change), and [Security](/reference/security#mcp-and-explore) for what the model reads. |
 | `--max-steps <n>` | Exploration steps at most, an integer 1-100. Default: `8`. Out of range exits 2. |
 | `--timeout <ms>` | The run's wall clock, an integer 180000-7200000. Default: `600000`. The last minute is kept for the closing assessment. Out of range exits 2. |
 | `--headed` | Requests visible UI when the engine supports it. |
@@ -969,8 +970,9 @@ flag, or write `--trace=<mode>` or `--video=<mode>`.
   the config says. A `--session` setup test runs as it would for `run`, with
   the config's agents, cache, and retries.
 - `<output>/report.json` gains `run.explore`: the goal, the budgets, why the
-  run ended (`finished`, `step-limit`, `time`, `stuck`, or `aborted`), the
-  assessment, the steps, and the findings.
+  run ended (`finished`, `skipped`, `step-limit`, `time`, `stuck`, or
+  `aborted`), the assessment, the change with `--changed-since` (`base` and
+  `files`), the steps, and the findings.
 - Artifacts go to a directory named from the goal's first words and a digest
   of the goal, target, and agent, such as
   `<output>/results/explore-check-the-cart-totals-1a2b3c4d5e6f7a8b/`. A rerun
@@ -998,7 +1000,8 @@ finding do (`stuck`).
 | --- | --- | --- |
 | Steps ran, no `issue` finding, and not every step was blocked | passed | 0 |
 | At least one `issue` finding | failed | 1 |
-| No step ran and nothing was found | blocked | 1 |
+| No step ran and nothing was found, unless the planner skipped the change | blocked | 1 |
+| With `--changed-since`, the planner skipped a change no user can see | passed | 0 |
 | Every step was blocked, with no `issue` finding | blocked | 1, 2, or 3, from the first blocker |
 | Config, engine, or model provider error | error | 2 or 3 |
 | Ctrl-C | | 130 |
@@ -1229,6 +1232,10 @@ Updated the agent skill in .agents/skills/e2e/ (12 files)
   does. When none does, the command exits 2. A deprecated release is
   never picked, and a prerelease only when `e2e` gets one. An integration
   follows the engine it plugs into.
+- **An added peer.** An `@e2e-dev/*` package those releases peer on, such as
+  `@e2e-dev/core` for an engine, is added beside the package that needs it
+  when `package.json` doesn't list it. Yarn installs no peer the project
+  doesn't list. It gets the version the new `e2e` depends on.
 - **The package manager.** The one the project's lockfile or
   `packageManager` field names, or pnpm at a pnpm workspace root. A
   workspace member with neither uses its workspace root's. A lockfile above
@@ -1401,7 +1408,7 @@ E2E_TELEMETRY_DEBUG=1 bunx e2e run
 | 2 | CLI, config, collection, dependency, credential, model-config, or policy error |
 | 3 | Engine, app process, model provider, artifact, or cleanup infrastructure failure; `e2e feedback` that could not be delivered; `e2e upgrade` that could not reach the registry |
 | 4 | Internal runner invariant or unhandled runner error |
-| 130 | Interrupted by a user or CI signal, or by `q` at the `--step` prompt |
+| 130 | Interrupted by a user or CI signal, by `q` at the `--step` prompt, or by `e2e run --step stop` |
 
 - Precedence for a mixed run is `130 > 4 > 3 > 2 > 1 > 0`. The report keeps
   every individual result; precedence affects only the process exit code.

@@ -13,7 +13,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Report1Document, ReportAttempt, ReportExplore, ReportExploreFinding, ReportFilter, ReportResult, ReportSerialGroup, ReportStep } from '../../src/report/build.ts';
 import { markdownReporter, renderMarkdownReport } from '../../src/report/markdown.ts';
-import type { FinishedRun } from '../../src/types.ts';
+import type { FinishedRun } from '../../src/run-types.ts';
 import { REPORT_AT, reportAttempt, reportDocument, reportError, reportResult, reportStep, reportTarget } from '../helpers/report.ts';
 
 const FINISHED_AT = '2026-01-01T00:00:08.400Z';
@@ -707,6 +707,19 @@ describe('renderMarkdownReport for an exploration', () => {
     // The exploration's own failure is the verdict the findings express, so it gets no block and no table.
     expect(body).not.toContain('**🔴 explore');
     expect(body).not.toContain('<details>');
+  });
+
+  it('says there was nothing to explore when the planner skipped the change', () => {
+    const body = renderMarkdownReport(explored({ ended: 'skipped', summary: 'Only README.md changed.', steps: [], findings: [] }, 'passed'));
+    expect(body).toContain('### 🟢 e2e explore: nothing to explore\n');
+    expect(body).toContain('0 of 8 steps · the change has nothing a user can see');
+    expect(renderMarkdownReport(explored({ steps: [], findings: [] }, 'passed'))).toContain('### 🟢 e2e explore: no findings\n');
+  });
+
+  it('names the change an exploration with --changed-since planned from', () => {
+    const document = explored({ change: { base: 'abc1234def5678abc1234def5678abc1234def56', files: 3 } });
+    expect(renderMarkdownReport(document)).toContain('**Goal:** Explore checkout  \n**Change:** 3 files changed since `abc1234`  \n**Steps:**');
+    expect(renderMarkdownReport(explored())).not.toContain('**Change**');
   });
 
   it('keeps a backtick inside a linkable token by lengthening the code span delimiter, as GFM reads it', () => {

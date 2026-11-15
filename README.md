@@ -64,6 +64,7 @@ Flutter, and .NET MAUI, each a standalone project with a passing suite.
 
 | Package | What it does |
 | --- | --- |
+| [`@e2e-dev/browser-run`](https://www.npmjs.com/package/@e2e-dev/browser-run) | Cloudflare Browser Run hosted Chromium for the web engine. |
 | [`@e2e-dev/kernel`](https://www.npmjs.com/package/@e2e-dev/kernel) | Kernel hosted browsers for the web engine. |
 | [`@e2e-dev/lightpanda`](https://www.npmjs.com/package/@e2e-dev/lightpanda) | Lightpanda, the open-source headless browser, started per run for the web engine. |
 | [`@e2e-dev/smol`](https://www.npmjs.com/package/@e2e-dev/smol) | smol machines browsers for the web engine: by default, each attempt branches a warm Chromium microVM. |
@@ -77,11 +78,7 @@ Flutter, and .NET MAUI, each a standalone project with a passing suite.
 
 ### Community
 
-Packages built on e2e's public API and maintained outside this repository.
-
-| Package | What it does |
-| --- | --- |
-| [`e2e-cige`](https://www.npmjs.com/package/e2e-cige) | [CIGE](https://www.amazon.science/publications/cige-an-agentic-ai-test-case-standard) test cases (Context, Intent, Guardrails, Execution) as JSON, run through `agent.act` and `agent.assert`, with run summaries and checks for agents that repair failing tests. Source: [vivekkrishna/cige](https://github.com/vivekkrishna/cige). |
+See [Community packages](https://e2e.com/docs/community-packages) for third-party integrations and how to add yours.
 
 ## Documentation
 

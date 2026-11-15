@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { collectFromRegistration } from '../../src/collect/collect.ts';
 import * as registry from '../../src/collect/registry.ts';
 import { collectModule, test } from '../../src/collect/registry.ts';
-import { CollectionError } from '../../src/internal/errors.ts';
+import { CollectionError } from '@e2e-dev/core/lib/internal/errors';
 
 const noop = async () => {};
 
@@ -54,6 +54,25 @@ describe('registration', () => {
       test('x', { tags: ['smoke', 'Login Form', 'billing:refunds', 'v2.0'] }, noop);
     });
     expect(registration.tests[0]!.options.tags).toEqual(['smoke', 'Login Form', 'billing:refunds', 'v2.0']);
+  });
+
+  it('rejects a timeout a timer cannot wait for', async () => {
+    const registration = await collectModule(async () => {
+      test('x', { timeout: 2 ** 31 - 1 }, noop);
+    });
+    expect(registration.tests[0]!.options.timeout).toBe(2 ** 31 - 1);
+    await expect(
+      collectModule(async () => {
+        test('x', { timeout: 2 ** 31 }, noop);
+      }),
+    ).rejects.toThrow('test options: timeout must be at most 2147483647 milliseconds, got 2147483648');
+    await expect(
+      collectModule(async () => {
+        test.describe('group', { timeout: 3_000_000_000 }, () => {
+          test('x', noop);
+        });
+      }),
+    ).rejects.toThrow('describe options: timeout must be at most 2147483647 milliseconds, got 3000000000');
   });
 
   it('rejects an option key test, describe, or setup does not know, naming the nearest', async () => {
