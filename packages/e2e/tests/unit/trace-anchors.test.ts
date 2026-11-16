@@ -240,10 +240,25 @@ describe('describeDelta', () => {
     expect(describeDelta(before, after, false)).toEqual({ appeared: [{ text: 'Item added' }], gone: [{ text: '41 items' }] });
   });
 
-  it('reads a count written with a CJK counter the way it reads an English one', () => {
-    const before = nodes([heading, node('c0', { text: '41件' })]);
-    const after = nodes([heading, node('c1', { text: '42件' }), node('n', { text: '追加しました' })]);
-    expect(describeDelta(before, after, false)).toEqual({ appeared: [{ text: '追加しました' }], gone: [{ text: '41件' }] });
+  it.each([
+    ['41件', '42件'],
+    ['41 件', '42 件'],
+    ['41個', '42個'],
+    ['41項目', '42項目'],
+    ['41筆', '42筆'],
+    ['共 41 条', '共 42 条'],
+    ['41个', '42个'],
+    ['41项', '42项'],
+    ['41笔', '42笔'],
+    ['총 41건', '총 42건'],
+    ['41개', '42개'],
+  ])('reads %s becoming %s, a count with a CJK counter, the way it reads an English one', (from, to) => {
+    const before = nodes([heading, node('c0', { text: from })]);
+    const after = nodes([heading, node('c1', { text: to }), node('n', { text: 'Item added' })]);
+    expect(describeDelta(before, after, false)).toEqual({ appeared: [{ text: 'Item added' }], gone: [{ text: from }] });
+  });
+
+  it('skips a CJK count on a screen the step navigated to', () => {
     const listed = nodes([heading, node('p', { text: '全9件中 1〜9件を表示' }), node('n', { text: 'インポートしたレコード' })]);
     expect(describeDelta(nodes([heading]), listed, true).appeared).toEqual([{ text: 'インポートしたレコード' }]);
   });
