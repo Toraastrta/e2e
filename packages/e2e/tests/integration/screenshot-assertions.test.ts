@@ -453,8 +453,9 @@ test('threshold', async ({ app, screen }) => {
         observe: async () => {
           if (!armed) return;
           observations += 1;
+          // Captures take 400 ms and start at 0, 420, and 870 ms: the third starts with less left than a capture takes.
           if (observations !== hangsAt) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            await new Promise((resolve) => setTimeout(resolve, 400));
             return;
           }
           await new Promise((resolve) => setTimeout(resolve, 1_200));
@@ -492,7 +493,8 @@ test('threshold', async ({ app, screen }) => {
         observe: async () => {
           if (!armed) return;
           observations += 1;
-          await new Promise((resolve) => setTimeout(resolve, 300));
+          // Captures take 400 ms and start at 0, 420, and 870 ms: the third starts with less left than a capture takes.
+          await new Promise((resolve) => setTimeout(resolve, 400));
           if (observations < 3) return;
           await new Promise((resolve) => setTimeout(resolve, 300));
           throw engineFailure('OPERATION_TIMEOUT', 'the screenshot outlived its budget');
