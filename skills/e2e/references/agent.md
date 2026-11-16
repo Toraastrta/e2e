@@ -73,7 +73,7 @@ install `@e2e-dev/acp` and its adapter, and put
 - `context` is what the app calls things, sent to every model call, judges
   included; `system` is how the acting agent works, read only by the act
   loop. Both live on the agents entry; `agentContext` on a test or group
-  adds more. Under `e2e run`, every prompt opens with the test's title path
+  adds more. Under `e2e run`, every prompt carries the test's title path
   (`Test: billing > upgrades the tier`), judges included, so name a test
   for what it covers, not for the verdict it expects.
 
@@ -165,7 +165,8 @@ The tools, one per engine action. Name the target as the screen names it
   recently when the opener is closed too. The last open tab stays open.
   Engines with `session.closeTab`, such as web.
 - `type_secret`: a declared secret by name; plaintext never reaches the model.
-  Offered only when the step declares secrets and the engine can fill them.
+  Offered whenever the engine can fill secrets; the step's opening message
+  lists the ones it declares, and an undeclared name fills nothing.
 - `screenshot`: attach viewport pixels; every later result then carries one.
 - `tap_at`/`hover_at`/`press_at`/`select_at`/`type_at`: a screenshot point.
 - `drag_at`: from one screenshot point to another (`to_x`, `to_y`).
