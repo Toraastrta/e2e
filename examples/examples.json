@@ -1850,6 +1850,32 @@
           "web"
         ]
       }
+    },
+    {
+      "slug": "langgraph-mcp-isolation",
+      "title": "Running isolated e2e MCP sessions from LangGraph",
+      "shortTitle": "LangGraph + MCP",
+      "description": "Two isolated browser sessions coordinated by a compiled Python LangGraph, with exception and cancellation cleanup over stdio MCP.",
+      "source": "community",
+      "repository": "https://github.com/jxnxts/e2e-langgraph-mcp-example/tree/ab80514b5d35c47124e06efc48a7ab658062403c",
+      "author": {
+        "name": "Jonatas Soares",
+        "github": "jxnxts"
+      },
+      "license": "Apache-2.0",
+      "tags": {
+        "framework": [
+          "python",
+          "nodejs"
+        ],
+        "useCase": [
+          "test-isolation",
+          "mcp"
+        ],
+        "platform": [
+          "web"
+        ]
+      }
     }
   ]
 }

@@ -1233,6 +1233,15 @@ export interface TargetApp {
    */
   bundleId?: string | undefined;
   /**
+   * Where `app.open(path)` opens on a device target: the link base a path
+   * joins, so `app.open('/orders/42')` opens `https://shop.example.com/orders/42`
+   * (a universal or App Link) or, with `shopapp://`, `shopapp://orders/42`
+   * (a custom scheme), in the pinned app. Only a target whose engine opens
+   * links takes it; `file:`, `data:`, `javascript:`, `view-source:`, `blob:`,
+   * and `filesystem:` are refused.
+   */
+  linkBase?: string | undefined;
+  /**
    * The build a device target runs against, an iOS `.app` bundle or an
    * Android `.apk`, resolved against the project root. Without `bundleId`,
    * the app it installs is the one launched.
@@ -1548,8 +1557,8 @@ export type AgentConfig = AgentOptions &
 
 /**
  * The project half of `E2EConfig`: targets, agents, the replay cache,
- * secrets, budgets, and output, which `resolveProjectConfig` resolves;
- * `E2EConfig` adds the runner's reporters and test filters.
+ * secrets, budgets, and output. The test runner and `@e2e-dev/core` both resolve
+ * it; `E2EConfig` adds the runner's reporters and test filters.
  */
 export interface ProjectConfig {
   /** Stable project id, 1 through 256 characters; defaults to the root `package.json` name. */
