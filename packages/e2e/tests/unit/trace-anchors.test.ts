@@ -240,6 +240,14 @@ describe('describeDelta', () => {
     expect(describeDelta(before, after, false)).toEqual({ appeared: [{ text: 'Item added' }], gone: [{ text: '41 items' }] });
   });
 
+  it('reads a count written with a CJK counter the way it reads an English one', () => {
+    const before = nodes([heading, node('c0', { text: '41件' })]);
+    const after = nodes([heading, node('c1', { text: '42件' }), node('n', { text: '追加しました' })]);
+    expect(describeDelta(before, after, false)).toEqual({ appeared: [{ text: '追加しました' }], gone: [{ text: '41件' }] });
+    const listed = nodes([heading, node('p', { text: '全9件中 1〜9件を表示' }), node('n', { text: 'インポートしたレコード' })]);
+    expect(describeDelta(nodes([heading]), listed, true).appeared).toEqual([{ text: 'インポートしたレコード' }]);
+  });
+
   describe('volatile anchors across both sides of the delta', () => {
     const record = node('row', { role: 'row', name: 'Example record' });
 

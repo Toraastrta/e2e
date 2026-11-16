@@ -185,10 +185,13 @@ const VOLATILE_TEXT: readonly RegExp[] = [
  * differently, when the other side of the delta already showed the same
  * text with other numbers (`41 items` became `42 items`), or when the step
  * moved to another route and the count is part of the screen it opened.
+ * CJK counts put the counter word right after the digits (`42件`), with no
+ * word boundary or space for the English patterns to match.
  */
 const COUNT_TEXT: readonly RegExp[] = [
   /\b\d+\s*(?:to|-|\u2013)\s*\d+\s+of\s+\d+\b/i,
   /\b\d+\s+(?:results?|items?|rows?|entries|records?|matches|total)\b/i,
+  /\d+\s*(?:件|個|个|개|건|項目|项目|条)/,
 ];
 
 /**
