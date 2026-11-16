@@ -1759,6 +1759,8 @@ await pollCondition({
 - Bound each read `evaluate` makes by `deadline`
   (`context.operation(deadline.remaining())`). A read on the action timeout
   can outlast the assertion's own.
+- It reads again 20 ms after the first read, 50 ms after the second, then
+  every 100 ms. Actions and `waitFor` wait for their node at the same pace.
 - An `OPERATION_TIMEOUT` from an `evaluate` ends the poll under the rules in
   [Timeouts at a deadline](#timeouts-at-a-deadline). `onTimeout(cause)`
   builds the failure with it.

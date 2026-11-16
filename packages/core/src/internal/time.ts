@@ -91,8 +91,21 @@ export function budgetText(ms: number): string {
   return `${ms}ms`;
 }
 
-/** Canonical polling cadence for locator and assertion loops. */
+/** Canonical polling cadence for locator and assertion loops, and the longest pause between two reads of a wait. */
 export const POLL_INTERVAL_MS = 100;
+
+/**
+ * The pauses after a wait's first reads. Most waits end within a frame or
+ * two of their first miss (a render, a state update, a request settling),
+ * so the early reads come sooner; a wait that runs on reads every
+ * `POLL_INTERVAL_MS`, and no pause is ever longer.
+ */
+const POLL_BACKOFF_MS: readonly number[] = [20, 50];
+
+/** The pause after a wait's read number `round`, counted from 0: 20 ms, 50 ms, then `POLL_INTERVAL_MS`. */
+export function pollDelay(round: number): number {
+  return POLL_BACKOFF_MS[round] ?? POLL_INTERVAL_MS;
+}
 
 /**
  * The reads of one wait. Each engine read runs until the wait's deadline
@@ -211,7 +224,7 @@ export async function pollReads(options: PollReadsOptions): Promise<void> {
   let holdingSince: number | undefined;
   const holds = (now: number): boolean => holdingSince !== undefined && now - holdingSince >= grace;
   let sampled = false;
-  for (;;) {
+  for (let round = 0; ; round += 1) {
     let value: boolean | undefined;
     reads.starting(readAt);
     try {
@@ -230,7 +243,7 @@ export async function pollReads(options: PollReadsOptions): Promise<void> {
     const now = Date.now();
     if (holds(Math.min(now, deadline.endsAt))) return;
     if (deadline.expired(now)) throw await options.onTimeout();
-    await sleep(Math.min(POLL_INTERVAL_MS, deadline.remaining(now)), options.signal);
+    await sleep(Math.min(pollDelay(round), deadline.remaining(now)), options.signal);
     readAt = Date.now();
     if (negated && deadline.expired(readAt)) {
       if (holds(readAt)) return;
