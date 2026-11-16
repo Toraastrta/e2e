@@ -8,7 +8,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { isMap, isScalar, parseDocument, type Document, type Scalar, type YAMLMap, type YAMLSeq } from 'yaml';
+import { isMap, isNode, isScalar, parseDocument, visit, type Document, type Scalar, type YAMLMap, type YAMLSeq } from 'yaml';
 import { resolvePlatform, targetName } from '@e2e-dev/core/lib/config/targets';
 import { isLoopbackHost } from '@e2e-dev/core/lib/internal/urls';
 import type { PackageManager } from '../../internal/package-manager.ts';
@@ -78,6 +78,32 @@ export function getCiService(id: CiId): CiService {
   return service;
 }
 
+/** The keys whose values a service runs as shell: a GitHub step's `run`, an action's `script`, and a GitLab job's scripts. */
+const COMMAND_KEYS = new Set(['run', 'script', 'before_script', 'after_script']);
+
+/** `e2e run` as words of their own, which `e2e runner`, `test:e2e run`, and `cypress-e2e run` are not. */
+const E2E_RUN = /(?:^|[\s;&|()'"`])e2e\s+run(?=$|[\s;&|()'"`])/u;
+
+/**
+ * Whether a pipeline file runs `e2e run` in one of its commands. The words
+ * in a YAML or shell comment, or in a step's name, run nothing.
+ */
+function runsE2E(pipeline: string): boolean {
+  let runs = false;
+  visit(parseDocument(pipeline), {
+    Pair(_key, pair) {
+      if (!isScalar(pair.key) || !COMMAND_KEYS.has(String(pair.key.value)) || !isNode(pair.value)) return undefined;
+      visit(pair.value, {
+        Scalar(_index, command) {
+          runs ||= String(command.value).split('\n').some((line) => E2E_RUN.test(line.replace(/(?:^|\s)#.*$/u, '')));
+        },
+      });
+      return runs ? visit.BREAK : visit.SKIP;
+    },
+  });
+  return runs;
+}
+
 /**
  * Where the GitHub workflow goes: `.github/workflows/e2e.yml`, unless that
  * file or another workflow already runs `e2e run`, in which case e2e is set up.
@@ -85,7 +111,7 @@ export function getCiService(id: CiId): CiService {
 function locateGithubWorkflow(root: string): CiFile {
   const workflows = path.join(root, '.github', 'workflows');
   const running = existsSync(workflows)
-    ? readdirSync(workflows).filter((name) => /\.ya?ml$/u.test(name)).find((name) => readFileSync(path.join(workflows, name), 'utf8').includes('e2e run'))
+    ? readdirSync(workflows).filter((name) => /\.ya?ml$/u.test(name)).find((name) => runsE2E(readFileSync(path.join(workflows, name), 'utf8')))
     : undefined;
   if (running !== undefined) return { file: `.github/workflows/${running}`, existing: true };
   return { file: GITHUB_WORKFLOW, existing: existsSync(path.join(root, GITHUB_WORKFLOW)) };
@@ -100,7 +126,7 @@ function locateGitlabPipeline(root: string): CiFile {
   const main = path.join(root, GITLAB_PIPELINE);
   if (!existsSync(main)) return { file: GITLAB_PIPELINE, existing: false };
   const pipeline = readFileSync(main, 'utf8');
-  if (pipeline.includes('e2e run')) return { file: GITLAB_PIPELINE, existing: true };
+  if (runsE2E(pipeline)) return { file: GITLAB_PIPELINE, existing: true };
   // The jobs run in GitLab's default `test` stage, which a pipeline that lists its own stages may leave out.
   const stages = gitlabStages(pipeline);
   // GitLab merges jobs of the same name across included files, so the jobs step aside for ones the pipeline already has.

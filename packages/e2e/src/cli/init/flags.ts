@@ -43,7 +43,7 @@ export function addInitOptions(command: Command): Command {
     .option('--skills <dirs>', `where to install the agent skill, comma-separated: ${SKILL_DIRS.join(', ')}, or none`, parseNames('skill directory'))
     .option('--mcp <files>', `where to register the MCP server, comma-separated: ${MCP_FILES.join(', ')}, or none`, parseNames('MCP config file'))
     .addOption(
-      new Option('--ci <id>', 'CI pipeline that runs the web tests; none writes none, and --yes alone writes none').choices([
+      new Option('--ci <id>', 'CI pipeline that runs the tests, one job per platform; none writes none, and --yes alone writes none').choices([
         ...CI_SERVICES.map((service) => service.id),
         'none',
       ]),

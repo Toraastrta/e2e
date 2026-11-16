@@ -460,6 +460,36 @@ describe('project detection', () => {
   });
 
   it.each([
+    ['      - run: pnpm exec e2e run --target web\n'],
+    ['      - run: |\n          adb install -r app.apk\n          (cd site && xvfb-run -a bunx e2e run)\n'],
+    ['      - uses: reactivecircus/android-emulator-runner@v2\n        with:\n          script: yarn e2e run --workers 1\n'],
+  ])('counts a GitHub workflow with the command %j as set up', (steps) => {
+    mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true });
+    writeFileSync(path.join(dir, '.github', 'workflows', 'ci.yml'), `jobs:\n  test:\n    steps:\n${steps}`);
+    expect(getCiService('github-actions').locate(dir)).toEqual({ file: '.github/workflows/ci.yml', existing: true });
+  });
+
+  it.each([
+    ['      - run: npm run cypress # our old e2e runner\n'],
+    ['      # replaces npx e2e run\n      - run: npx playwright test\n'],
+    ['      - name: Cypress e2e run\n        run: npx cypress run\n'],
+    ['      - run: |\n          # npx e2e run\n          npm run test:e2e run\n'],
+    ['      - run: npx cypress-e2e run\n'],
+  ])('writes its own workflow beside one that only mentions e2e run: %j', (steps) => {
+    mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true });
+    writeFileSync(path.join(dir, '.github', 'workflows', 'ci.yml'), `jobs:\n  test:\n    steps:\n${steps}`);
+    expect(getCiService('github-actions').locate(dir)).toEqual({ file: '.github/workflows/e2e.yml', existing: false });
+  });
+
+  it('counts a GitLab pipeline as set up by its scripts, not by its comments or job names', () => {
+    const gitlab = getCiService('gitlab');
+    writeFileSync(path.join(dir, '.gitlab-ci.yml'), 'e2e run:\n  # npx e2e run\n  script:\n    - npx cypress run # the old e2e runner\n');
+    expect(gitlab.locate(dir)).toMatchObject({ file: '.gitlab/e2e.gitlab-ci.yml', existing: false });
+    writeFileSync(path.join(dir, '.gitlab-ci.yml'), 'test:\n  before_script:\n    - npm ci\n  script:\n    - npx e2e run --reporter list,junit\n');
+    expect(gitlab.locate(dir)).toEqual({ file: '.gitlab-ci.yml', existing: true });
+  });
+
+  it.each([
     ['24\n', '24'],
     ['v24.8.0', '24'],
     ['26.1', '26'],

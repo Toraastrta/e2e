@@ -89,8 +89,8 @@ export interface InitOptions {
   mcp?: readonly string[];
   install?: boolean;
   /**
-   * The CI pipeline to write for the web targets; `none` writes none. Not
-   * asked when the project has no web engine or e2e already runs in CI, and
+   * The CI pipeline to write, one job per platform; `none` writes none. Not
+   * asked when the project has no web or mobile engine or e2e already runs in CI, and
    * `--yes` alone writes none, since a pipeline runs on the next push.
    */
   ci?: CiChoice;
