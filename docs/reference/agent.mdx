@@ -252,12 +252,15 @@ await agent.waitFor('the upload progress reports completion', { interval: 500 })
 
 - It observes and judges at once, and succeeds on the first judgment that
   holds.
-- After a false or inconclusive judgment it waits out `interval`. Then it
-  observes every 500 ms (or every `interval`, when shorter) without a model
-  call. It judges again only once the screen or its location differs from the
-  one last judged, pixels included under `vision`. Under `vision: 'only'` a
-  location change alone does not count, since that mode is not shown the
-  location.
+- After a false or inconclusive judgment it observes every 500 ms (or every
+  `interval`, when shorter) without a model call. It judges again only once
+  the screen or its location differs from the one last judged, pixels
+  included under `vision`. Under `vision: 'only'` a location change alone
+  does not count, since that mode is not shown the location.
+- A change is judged as soon as it is seen when the screen had not changed
+  in the `interval` before it, or not at all since the wait began. While the
+  screen keeps changing (a progress counter, a clock), it judges at most once
+  per `interval` after the previous judgment.
 - Judgments follow the [`agent.assert`](#agent-assert) rules: a value shown
   in more than one place holds only once every instance agrees.
 
@@ -270,7 +273,8 @@ await agent.waitFor('the upload progress reports completion', { interval: 500 })
 | `vision` | [`VisionMode`](#vision) | `false` |
 | `agent` | `string` | the test's agent |
 
-`interval` is the least time between two judgments, 100 through 60000 ms.
+`interval` is the least time between two judgments of a screen that keeps
+changing, 100 through 60000 ms.
 `params` work as in [`agent.assert`](#agent-assert).
 
 | Throws | When |
@@ -618,7 +622,7 @@ export interface AssertOptions extends VisionOption, AgentOption {
   screenshot?: boolean;
 }
 
-/** `waitFor` options: a judgment at most once per `interval` until `timeout`. */
+/** `waitFor` options: a judgment on each screen change, at most once per `interval` while it keeps changing, until `timeout`. */
 export interface WaitForOptions extends VisionOption, AgentOption {
   /**
    * Values the condition refers to as `{name}`, with the same rules as `act`
@@ -627,7 +631,7 @@ export interface WaitForOptions extends VisionOption, AgentOption {
   params?: AgentParams;
   /** Deadline in milliseconds; defaults to the agent's `judgmentTimeout`, 30000. */
   timeout?: number;
-  /** Least time between two judgments, in milliseconds; 100 through 60000, default 3000. */
+  /** Least time between two judgments of a screen that keeps changing, in milliseconds; 100 through 60000, default 3000. */
   interval?: number;
   /** Judgment budget; defaults to `agents.<name>.maxModelCalls` and can only lower it. */
   maxModelCalls?: number;

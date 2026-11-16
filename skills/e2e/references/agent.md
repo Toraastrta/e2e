@@ -219,8 +219,10 @@ expect(data.titles).toContain('Buy milk');
 - A value shown in more than one place (a total in the summary and on the
   pay button) must agree everywhere, or the judgment fails. Name the one
   you mean (`'the order summary total is $42.00'`) when only it matters.
-- `waitFor` observes every `interval` (default 3 s), judges only when the
-  screen or its location changed, and is `STEP_TIMEOUT` after `timeout` (default 30 s).
+- `waitFor` observes every 500 ms, judges only when the screen or its
+  location changed, and is `STEP_TIMEOUT` after `timeout` (default 30 s). A
+  change after a still screen is judged at once; while the screen keeps
+  changing, at most once per `interval` (default 3 s).
 - Never sleep for a fixed time to let the app settle. A sleep is too short
   on a slow run and wasted time on a fast one; `waitFor` returns as soon as
   the state appears:
