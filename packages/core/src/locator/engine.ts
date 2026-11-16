@@ -242,7 +242,8 @@ export class LocatorEngine {
     missingFrame: MissingFrame = 'wait',
   ): Promise<readonly NodeRef[]> {
     let retried: unknown;
-    for (let round = 0; ; round += 1) {
+    const startedMs = Date.now();
+    for (;;) {
       try {
         return await reads.read((timeoutMs) => this.session.locate(expression, this.readOperation(timeoutMs)));
       } catch (cause) {
@@ -253,7 +254,7 @@ export class LocatorEngine {
           if (missingFrame === 'empty' && engineError.code === 'FRAME_NOT_FOUND') return [];
           if (!reads.deadline.expired()) {
             retried = cause;
-            await sleep(pollDelay(round), this.signal);
+            await sleep(pollDelay(Date.now() - startedMs), this.signal);
             continue;
           }
         }
@@ -300,7 +301,7 @@ if (sampled && reads.cutOff(cause)) throw await notFound(cause);
       const ref = await this.singleOf(refs, expression);
       if (ref !== null) return { ref, waitedMs: rounds > 1 ? Date.now() - startedMs : 0 };
       if (deadline.expired()) throw await notFound();
-      await sleep(pollDelay(rounds - 1), this.signal);
+      await sleep(pollDelay(Date.now() - startedMs), this.signal);
     }
   }
 
@@ -524,8 +525,9 @@ const ref = await this.singleOf(await this.resolveOnce(expression, reads, missin
         ...(cause === undefined ? {} : { cause }),
       });
     const reads = this.reads(deadline);
+    const pollStartedMs = Date.now();
     let sampled = false;
-    for (let round = 0; ; round += 1) {
+    for (;;) {
       let node: SemanticNode | null;
       try {
         ({ node } = await this.tryRead(expression, reads));
@@ -540,7 +542,7 @@ const ref = await this.singleOf(await this.resolveOnce(expression, reads, missin
         return;
       }
       if (deadline.expired()) throw notVisible();
-      await sleep(pollDelay(round), this.signal);
+      await sleep(pollDelay(Date.now() - pollStartedMs), this.signal);
     }
   }
 

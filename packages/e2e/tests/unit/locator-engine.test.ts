@@ -154,10 +154,10 @@ describe('LocatorEngine read retry contract', () => {
     expect(calls).toMatchObject({ resolve: 3, read: 1 });
   });
 
-  it('reads zero matches again after 20 ms, then 50 ms, then every poll tick', async () => {
+  it('reads zero matches again at 20 and 50 ms, then every poll tick from the start', async () => {
     const { engine, resolveTimeouts } = makeEngine({ resolve: [() => [], () => [], () => [], () => [], () => [REF]] });
     await engine.resolveExactlyOne(EXPRESSION, engine.deadline());
-    expect(resolveTimeouts).toEqual([1_000, 980, 930, 830, 730]);
+    expect(resolveTimeouts).toEqual([1_000, 980, 950, 900, 800]);
   });
 
   it('gives zero matches the action timeout, then LOCATOR_NOT_FOUND', async () => {
@@ -240,17 +240,16 @@ describe('LocatorEngine resolve retry contract', () => {
   });
 
   it('lets a slow last resolve finish past the deadline: a late match resolves', async () => {
-    const deadline = new Deadline(300);
+    const deadline = new Deadline(450);
     const { engine, resolveTimeouts } = makeEngine({
       resolve: [slowResolve(200, []), slowResolve(200, [REF])] as unknown as Array<() => readonly NodeRef[]>,
     });
     await expect(engine.resolveExactlyOne(EXPRESSION, deadline)).resolves.toBe(REF);
-    // The second resolve starts at 220 ms and may run to the deadline plus the 200 ms the first took.
-    expect(resolveTimeouts).toEqual([300, 280]);
+    expect(resolveTimeouts).toEqual([450, 350]);
   });
 
   it('ends a wait whose slow last resolve found nothing as LOCATOR_NOT_FOUND, not a timeout', async () => {
-    const deadline = new Deadline(300);
+    const deadline = new Deadline(450);
     const { engine, calls } = makeEngine({
       resolve: [slowResolve(200, []), slowResolve(200, [])] as unknown as Array<() => readonly NodeRef[]>,
     });
@@ -263,8 +262,8 @@ describe('LocatorEngine resolve retry contract', () => {
   it('gives each retry of a resolve what is left of its budget, not the whole budget again', async () => {
     const { engine, resolveTimeouts } = makeEngine({ resolve: ['stale', 'stale', () => [REF]] }, { actionTimeout: 1_000 });
     await engine.resolveNow(EXPRESSION, engine.reads(engine.deadline()));
-    // Retries wait 20 ms, then 50 ms.
-    expect(resolveTimeouts).toEqual([1_000, 980, 930]);
+    // Retries read at 20 and 50 ms.
+    expect(resolveTimeouts).toEqual([1_000, 980, 950]);
   });
 
   it('ends a frame wait the deadline cut off on the missing frame, as LOCATOR_NOT_FOUND', async () => {

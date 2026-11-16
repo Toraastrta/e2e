@@ -142,6 +142,41 @@ describe('pollCondition', () => {
     expect(calls).toBe(3);
   });
 
+  it('sees a state that arrives between poll ticks no later than a poll every tick would', async () => {
+    vi.useFakeTimers();
+    const startedAt = Date.now();
+    const readsAt: number[] = [];
+    const promise = pollCondition(
+      makeOptions({
+        evaluate: async () => {
+          readsAt.push(Date.now() - startedAt);
+          return Date.now() - startedAt >= 290;
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    await promise;
+    expect(readsAt).toEqual([0, 20, 50, 100, 200, 300]);
+  });
+
+  it('reads a poll tick apart when every read outlasts the early reads', async () => {
+    vi.useFakeTimers();
+    const startedAt = Date.now();
+    const readsAt: number[] = [];
+    const promise = pollCondition(
+      makeOptions({
+        evaluate: async () => {
+          readsAt.push(Date.now() - startedAt);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          return readsAt.length === 3;
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+    await promise;
+    expect(readsAt).toEqual([0, 400, 800]);
+  });
+
   it('throws the caller error at the deadline', async () => {
     vi.useFakeTimers();
     const promise = pollCondition(
@@ -168,8 +203,8 @@ describe('pollCondition', () => {
     const assertion = expect(promise).rejects.toThrow('poll timed out');
     await vi.advanceTimersByTimeAsync(1000);
     await assertion;
-    // Reads 20 ms, then 50 ms, after the first misses, then a poll tick apart.
-    expect(readsAt).toEqual([0, 20, 70, 170, 270, 350]);
+    // Early reads at 20 and 50 ms, then every poll tick from the start.
+    expect(readsAt).toEqual([0, 20, 50, 100, 200, 300, 350]);
   });
 
   it('negated: a budget shorter than the grace window is still satisfiable', async () => {
@@ -340,7 +375,7 @@ describe('pollCondition', () => {
     const assertion = expect(promise).rejects.toThrow('poll timed out');
     await vi.advanceTimersByTimeAsync(1000);
     await assertion;
-    // It decided at the deadline instead of reading past it: reads at 0, 20, 70, 170, 270, 370, and 470 ms.
+    // It decided at the deadline instead of reading past it: reads at 0, 20, 50, 100, 200, 300, and 400 ms.
     expect(calls).toBe(7);
   });
 
@@ -413,8 +448,7 @@ describe('pollCondition', () => {
     });
     await vi.advanceTimersByTimeAsync(1_000);
     await expect(promise).resolves.toBeUndefined();
-    // The second read starts at 220 ms: the cap's 180 ms left is less than the deadline plus the 200 ms read.
-    expect(timeouts).toEqual([350, 180]);
+    expect(timeouts).toEqual([350, 100]);
   });
 
   it('shares the extra time past the deadline across the reads that run in it', async () => {
@@ -544,8 +578,7 @@ describe('pollCondition', () => {
         deadline,
         signal: new AbortController().signal,
         negated: true,
-        // Visible until `cutAfterMs`, then gone. Reads run at 0, 20, 70, 170, ... 1770 ms; the one at 1870 ms
-        // starts with under a poll tick left and is cut.
+        // Visible for the first 900 ms, then gone; the read that starts with under a poll tick left is cut.
         evaluate: async () => {
           if (deadline.remaining() < POLL_INTERVAL_MS) throw cut;
           return Date.now() - startedAt < cutAfterMs;
@@ -553,12 +586,12 @@ describe('pollCondition', () => {
         onTimeout: (cause) => Object.assign(new Error('poll timed out'), { cause }),
       });
     };
-    // Gone from 870 ms, seen by the read then: the grace window had run when the read was cut off at 1870 ms.
-    const passing = run(870);
+    // Gone from 900 ms: the grace window had run when the read was cut off at 1900 ms.
+    const passing = run(900);
     await vi.advanceTimersByTimeAsync(3_000);
     await expect(passing).resolves.toBeUndefined();
-    // Gone from 900 ms, first seen at 970 ms: it had not, and the poll fails with the cut-off read as its cause.
-    const failing = run(900);
+    // Gone from 1000 ms: it had not, and the poll fails with the cut-off read as its cause.
+    const failing = run(1_000);
     const assertion = expect(failing).rejects.toMatchObject({ message: 'poll timed out', cause: cut });
     await vi.advanceTimersByTimeAsync(3_000);
     await assertion;
