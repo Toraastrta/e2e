@@ -284,6 +284,12 @@ describe('describeDelta', () => {
     '2 行动计划',
     '2024 行程安排',
     '3行目を編集',
+    '2024 行业报告',
+    '2024 行業報告',
+    '3 行動計画',
+    '1 个性化设置',
+    '3個性派',
+    '2 条件满足',
   ])('keeps %s on a screen the step navigated to, since the digits are not a count', (text) => {
     const opened = nodes([heading, node('p', { text }), node('n', { text: 'インポートしたレコード' })]);
     expect(describeDelta(nodes([heading]), opened, true).appeared).toEqual([{ text }, { text: 'インポートしたレコード' }]);
