@@ -252,6 +252,10 @@ describe('describeDelta', () => {
     ['41笔', '42笔'],
     ['총 41건', '총 42건'],
     ['41개', '42개'],
+    ['共 41 条记录', '共 42 条记录'],
+    ['41개의 결과', '42개의 결과'],
+    ['41行', '42行'],
+    ['41행', '42행'],
   ])('reads %s becoming %s, a count with a CJK counter, the way it reads an English one', (from, to) => {
     const before = nodes([heading, node('c0', { text: from })]);
     const after = nodes([heading, node('c1', { text: to }), node('n', { text: 'Item added' })]);
@@ -261,6 +265,20 @@ describe('describeDelta', () => {
   it('skips a CJK count on a screen the step navigated to', () => {
     const listed = nodes([heading, node('p', { text: '全9件中 1〜9件を表示' }), node('n', { text: 'インポートしたレコード' })]);
     expect(describeDelta(nodes([heading]), listed, true).appeared).toEqual([{ text: 'インポートしたレコード' }]);
+  });
+
+  it.each([
+    'ThinkPad X1笔记本电脑',
+    'ThinkPad X1 筆記型電腦',
+    'iPhone 15个人版',
+    '3個人版',
+    '3개월 무료 체험이 시작되었습니다',
+    '3个月会员已开通',
+    '3個月會員已開通',
+    '第3条 個人情報の取扱い',
+  ])('keeps %s on a screen the step navigated to, since the digits are not a count', (text) => {
+    const opened = nodes([heading, node('p', { text }), node('n', { text: 'インポートしたレコード' })]);
+    expect(describeDelta(nodes([heading]), opened, true).appeared).toEqual([{ text }, { text: 'インポートしたレコード' }]);
   });
 
   describe('volatile anchors across both sides of the delta', () => {

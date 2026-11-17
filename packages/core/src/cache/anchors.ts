@@ -186,12 +186,14 @@ const VOLATILE_TEXT: readonly RegExp[] = [
  * text with other numbers (`41 items` became `42 items`), or when the step
  * moved to another route and the count is part of the screen it opened.
  * CJK counts put the counter word right after the digits (`42件`), with no
- * word boundary or space for the English patterns to match.
+ * word boundary or space for the English patterns to match. The counters are
+ * the same generic tallies as the English ones, and the lookarounds keep
+ * words that only start with one, `3个月` or `个人版`, and `第3条`, out.
  */
 const COUNT_TEXT: readonly RegExp[] = [
   /\b\d+\s*(?:to|-|\u2013)\s*\d+\s+of\s+\d+\b/i,
   /\b\d+\s+(?:results?|items?|rows?|entries|records?|matches|total)\b/i,
-  /\d+\s*(?:件|個|个|개|건|項|项|条|筆|笔)/,
+  /(?<!第\s*)\b\d+\s*(?:件|個(?![月人])|个(?![月人])|개(?!월)|건|項|项|条|筆(?!記)|笔(?!记)|行|행)/,
 ];
 
 /**
