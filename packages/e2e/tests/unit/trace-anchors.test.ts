@@ -290,6 +290,8 @@ describe('describeDelta', () => {
     '1 个性化设置',
     '3個性派',
     '2 条件满足',
+    '3件目の注文',
+    '3個目のボタン',
   ])('keeps %s on a screen the step navigated to, since the digits are not a count', (text) => {
     const opened = nodes([heading, node('p', { text }), node('n', { text: 'インポートしたレコード' })]);
     expect(describeDelta(nodes([heading]), opened, true).appeared).toEqual([{ text }, { text: 'インポートしたレコード' }]);
