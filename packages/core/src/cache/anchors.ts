@@ -189,11 +189,13 @@ const VOLATILE_TEXT: readonly RegExp[] = [
  * word boundary or space for the English patterns to match. The counters are
  * the same generic tallies as the English ones, and the lookarounds keep
  * words that only start with one, `3个月` or `个人版`, and `第3条`, out.
+ * Korean spaces its words, so after a space a Korean counter only counts
+ * when no Hangul follows it: `2024 개발자` is a year and a word.
  */
 const COUNT_TEXT: readonly RegExp[] = [
   /\b\d+\s*(?:to|-|\u2013)\s*\d+\s+of\s+\d+\b/i,
   /\b\d+\s+(?:results?|items?|rows?|entries|records?|matches|total)\b/i,
-  /(?<!第\s*)\b\d+\s*(?:件|個(?![月人])|个(?![月人])|개(?!월)|건|項|项|条|筆(?!記)|笔(?!记)|行|행)/,
+  /(?<!第\s*)\b\d+(?:\s*(?:件|個(?![月人])|个(?![月人])|項|项|条|筆(?!記)|笔(?!记)|行(?![目程动]))|(?:개(?!월)|건|행)|\s+(?:개|건|행)(?![가-힣]))/,
 ];
 
 /**

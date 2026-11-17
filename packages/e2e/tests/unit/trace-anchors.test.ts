@@ -251,6 +251,7 @@ describe('describeDelta', () => {
     ['41项', '42项'],
     ['41笔', '42笔'],
     ['총 41건', '총 42건'],
+    ['41 개', '42 개'],
     ['41개', '42개'],
     ['共 41 条记录', '共 42 条记录'],
     ['41개의 결과', '42개의 결과'],
@@ -276,6 +277,13 @@ describe('describeDelta', () => {
     '3个月会员已开通',
     '3個月會員已開通',
     '第3条 個人情報の取扱い',
+    '2024 개발자 컨퍼런스',
+    '2025 건강검진 결과',
+    '2024 행사 일정',
+    'iPhone 15 개봉기',
+    '2 行动计划',
+    '2024 行程安排',
+    '3行目を編集',
   ])('keeps %s on a screen the step navigated to, since the digits are not a count', (text) => {
     const opened = nodes([heading, node('p', { text }), node('n', { text: 'インポートしたレコード' })]);
     expect(describeDelta(nodes([heading]), opened, true).appeared).toEqual([{ text }, { text: 'インポートしたレコード' }]);
